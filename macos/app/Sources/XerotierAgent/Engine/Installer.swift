@@ -88,7 +88,7 @@ enum Installer {
             emit("ERROR: \(error.localizedDescription)", .err)
             return false
         }
-        emit("Installed HF compat shim into \(site).", .out)
+        emit("Installed application support files into \(site).", .out)
         return true
     }
 

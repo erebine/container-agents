@@ -78,7 +78,7 @@ enum StepKind: CaseIterable {
         case .python: return "Provision Python 3.12 (uv)"
         case .vllm: return "Install vllm-metal"
         case .download: return "Download agent binary"
-        case .shim: return "Install HuggingFace shim"
+        case .shim: return "Install application"
         case .render: return "Render LaunchAgent"
         case .start: return "Enroll & start service"
         }
@@ -90,7 +90,7 @@ enum StepKind: CaseIterable {
         case .python: return "uv provisions a pinned CPython 3.12 for the venv."
         case .vllm: return "Builds vLLM core from source — this is the slow step."
         case .download: return "Fetch xerotier-xim-agent-Darwin-arm64 from releases."
-        case .shim: return "Install the huggingface_hub version-compat shim."
+        case .shim: return "Install supporting application files into the environment."
         case .render: return "Write the wrapper, entrypoint, and plist."
         case .start: return "Enroll with the join key, then run under launchd."
         }
