@@ -46,3 +46,7 @@ sudo podman logs xim-vllm-rocm -f
 On Apple Silicon, Xerotier XIM runs as a native macOS application that installs,
 configures, and controls the agent with Metal-accelerated vLLM. See the
 [MacOS README](macos/README.md) for requirements and setup.
+
+<div style="text-align: center;">
+<img src="xerotier-macos-desktop.png" alt="MacOS Desktop App" width="50%">
+</div>

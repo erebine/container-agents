@@ -8,20 +8,38 @@ the logged-in user — no admin password.
 
 > **Status: real engine.** The install pipeline, service control, preflight,
 > release download, and log streaming are implemented natively (see the
-> `Sources/XerotierAgent/Engine/` layer) — a Swift port of the shell script.
-> On launch the app inspects the host and reflects any existing install.
+> `Sources/XerotierAgent/Engine/` layer). On launch the app inspects the host
+> and reflects any existing install.
 
-## Run it
+## Install (recommended)
 
-From this directory (`macos/app`):
+Download the latest **`Xerotier-<version>.dmg`** from the
+[Releases page](https://github.com/cloudnull/xerotier-public/releases/latest),
+then:
+
+1. Open the DMG and **drag `Xerotier.app` into Applications**.
+2. Launch **Xerotier** from Applications (or Spotlight).
+3. Go to **Setup**, paste your join key, and click **Install & Start**.
+
+That's it — no toolchain or `git` checkout required. The app downloads and
+configures everything else itself, all as your user (no admin password).
+
+> If macOS Gatekeeper blocks a non‑notarized build, right‑click the app →
+> **Open** the first time (or run `xattr -dr com.apple.quarantine
+> /Applications/Xerotier.app`). Notarized releases open with no prompt.
+
+## Build from source (optional)
+
+For development, or to run an unreleased build, you need the Xcode/Swift
+toolchain (built and verified with Swift 6.2; minimum deployment target macOS
+14). From this directory (`macos/app`):
 
 ```bash
-swift run
+swift run                    # build + launch
 ```
 
-or open `Package.swift` in Xcode and press Run. Requires the Xcode/Swift
-toolchain (built and verified with Swift 6.2 on macOS). Minimum deployment
-target: macOS 14.
+or open `Package.swift` in Xcode and press Run. To produce your own signed
+`.app` + DMG, see [Packaging](#packaging) below.
 
 ## What it does
 
@@ -68,7 +86,9 @@ Sources/XerotierAgent/
 
 ## Packaging
 
-Build a distributable `.app` and DMG from `packaging/`:
+For maintainers: this is how the release `Xerotier-<version>.dmg` (the
+[recommended install](#install-recommended)) is produced. Build a distributable
+`.app` and DMG from `packaging/`:
 
 ```bash
 # Ad-hoc signed (local/dev) — no Apple Developer ID needed:

@@ -21,9 +21,14 @@ Apple's `container` binary runs Linux guests with no GPU/Metal passthrough.
 
 ## Install
 
-1. Open **Xerotier Agent** and go to **Setup**.
-2. Confirm the host preflight passes, paste your join key, and click
+1. Download the latest **`Xerotier-<version>.dmg`** from the
+   [Releases page](https://github.com/cloudnull/xerotier-public/releases/latest)
+   and drag **Xerotier.app** into Applications.
+2. Open **Xerotier** and go to **Setup**.
+3. Confirm the host preflight passes, paste your join key, and click
    **Install & Start**.
+
+(Prefer to build from source? See [`app/README.md`](app/README.md).)
 
 The app then, for real:
 
