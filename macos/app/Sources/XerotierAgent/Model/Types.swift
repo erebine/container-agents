@@ -60,6 +60,23 @@ enum ServiceState: String {
     var isBusy: Bool { self == .starting || self == .stopping }
 }
 
+/// Higher-level health derived from launchd state + metrics reachability.
+enum AgentHealth {
+    case stopped      // not running
+    case loading      // running, metrics not reachable yet (model loading)
+    case serving      // running, metrics reachable
+    case unhealthy    // running but metrics unreachable for too long / crash-looping
+
+    var label: String {
+        switch self {
+        case .stopped: return "Stopped"
+        case .loading: return "Loading…"
+        case .serving: return "Serving"
+        case .unhealthy: return "Unhealthy"
+        }
+    }
+}
+
 // MARK: - Install steps
 
 /// The real install pipeline steps, in order.
@@ -140,23 +157,75 @@ struct LogLine: Identifiable {
 // MARK: - Settings
 
 /// Mirrors the XEROTIER_AGENT_* environment surface from macos/README.md.
-struct AgentSettings {
+struct AgentSettings: Equatable {
     var joinKey: String = ""
     var preRelease: Bool = false
     var reinstallVLLM: Bool = false
-    var maxConcurrent: String = "1"
+    /// Ceiling for concurrent requests. Empty = the agent auto-configures it
+    /// from the GPU/model (usually > 1). XEROTIER_AGENT_MAX_CONCURRENT.
+    var maxConcurrent: String = ""
     var logLevel: String = "info"
     var allowInsecure: Bool = false
-    var metricsPort: String = "9090"
+    var metricsPort: String = "9094"
     var disableMetrics: Bool = false
-    /// Fraction (0–1) of the Metal unified-memory budget vLLM may use. Empty =
-    /// leave it to the agent's default. Passed through as --gpu-memory-utilization.
+    /// Fraction (0–1) of the GPU memory budget vLLM may use. Empty = agent
+    /// default (0.95). XEROTIER_AGENT_GPU_MEMORY_UTILIZATION.
     var gpuMemoryUtilization: String = ""
     /// Max concurrent sequences vLLM batches. Lower it to free KV-cache memory
-    /// for longer context per request. Empty = agent default. --max-num-seqs.
+    /// for longer context. Empty = agent default (64). XEROTIER_AGENT_MAX_NUM_SEQS.
     var maxNumSeqs: String = ""
+    /// Maximum model context length (caps KV-cache allocation). Empty = derived
+    /// from the model. XEROTIER_AGENT_MAX_MODEL_LEN.
+    var maxModelLen: String = ""
+    /// Force a quantization method. Empty = auto-detect. XEROTIER_AGENT_VLLM_QUANTIZATION.
+    var quantization: String = ""
+    /// KV-cache backend: native | lmcache | none. Empty = agent default.
+    /// XEROTIER_AGENT_KV_CACHE_BACKEND.
+    var kvCacheBackend: String = ""
+    /// Model-cache size cap in GB. Empty = agent default (100).
+    /// XEROTIER_AGENT_MODEL_CACHE_MAX_SIZE_GB.
+    var modelCacheMaxSizeGB: String = ""
+    /// Speculative decoding (env-only on the agent: XEROTIER_AGENT_SPECULATIVE_*).
+    var speculativeEnabled: Bool = false
+    var speculativeMethod: String = ""
+    var speculativeTokens: String = ""
     var vllmArgs: String = ""
     var vllmEnv: String = ""
 
-    static let logLevels = ["trace", "debug", "info", "warn", "error"]
+    static let logLevels = ["trace", "debug", "info", "notice", "warning", "error", "critical"]
+    static let quantizations = ["fp8", "awq", "gptq", "bitsandbytes", "bitsandbytes-fp4"]
+    static let kvBackends = ["native", "lmcache", "none"]
+    static let speculativeMethods = ["ngram", "eagle", "medusa", "deepseek_mtp"]
+
+    /// Human-readable validation problems; empty means valid.
+    func validationErrors() -> [String] {
+        var errs: [String] = []
+
+        func posInt(_ value: String, _ name: String) {
+            let t = value.trimmingCharacters(in: .whitespaces)
+            guard !t.isEmpty else { return }
+            if Int(t).map({ $0 <= 0 }) ?? true { errs.append("\(name) must be a positive whole number.") }
+        }
+        posInt(maxConcurrent, "Max concurrent requests")
+        posInt(maxNumSeqs, "Max sequences")
+        posInt(maxModelLen, "Max context length")
+        posInt(modelCacheMaxSizeGB, "Model cache size")
+        if speculativeEnabled { posInt(speculativeTokens, "Speculative tokens") }
+
+        let portText = metricsPort.trimmingCharacters(in: .whitespaces)
+        if !portText.isEmpty, !(Int(portText).map { (1...65535).contains($0) } ?? false) {
+            errs.append("Metrics port must be between 1 and 65535.")
+        }
+
+        let g = gpuMemoryUtilization.trimmingCharacters(in: .whitespaces)
+        if !g.isEmpty {
+            if let d = Double(g) {
+                let frac = d > 1 ? d / 100 : d
+                if frac <= 0 || frac > 1 { errs.append("GPU memory utilization must be between 0 and 1.") }
+            } else {
+                errs.append("GPU memory utilization must be a number.")
+            }
+        }
+        return errs
+    }
 }

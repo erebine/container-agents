@@ -39,18 +39,74 @@ struct DashboardView: View {
                                 Text("unified").font(.caption2).foregroundStyle(.secondary)
                             }
                         }
-                        InfoTile("Max concurrent", value: model.settings.maxConcurrent,
+                        InfoTile("Max concurrent",
+                                 value: model.settings.maxConcurrent.isEmpty ? "auto" : model.settings.maxConcurrent,
                                  systemImage: "square.stack.3d.up")
                         InfoTile("Metrics", value: model.settings.disableMetrics
                                  ? "Disabled" : ":\(model.settings.metricsPort)",
                                  systemImage: "chart.line.uptrend.xyaxis")
                     }
+                    liveSection
                     activityCard
                 }
                 .padding(24)
             }
         }
     }
+
+    @ViewBuilder private var liveSection: some View {
+        if model.serviceState == .running {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Text("Live").font(.title3.weight(.semibold))
+                    healthPill
+                    Spacer()
+                }
+                if let m = model.metrics {
+                    LazyVGrid(columns: columns, spacing: 14) {
+                        InfoTile("Model", value: m.modelName ?? "—", systemImage: "shippingbox.fill")
+                        InfoTile("Running", value: intStr(m.requestsRunning),
+                                 systemImage: "play.circle")
+                        InfoTile("Queued", value: intStr(m.requestsWaiting),
+                                 systemImage: "hourglass")
+                        InfoTile("KV cache", value: pctStr(m.kvCacheUsage),
+                                 systemImage: "memorychip.fill")
+                        InfoTile("Generation", value: rateStr(m.generationTokensPerSec),
+                                 systemImage: "speedometer")
+                        InfoTile("Prompt", value: rateStr(m.promptTokensPerSec),
+                                 systemImage: "text.word.spacing")
+                    }
+                } else {
+                    Card {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text(model.health == .unhealthy
+                                 ? "Metrics endpoint unreachable on :\(model.settings.metricsPort)."
+                                 : "Waiting for the model to load…")
+                                .font(.callout).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var healthPill: some View {
+        let tint: Color = {
+            switch model.health {
+            case .serving: return .green
+            case .loading: return .orange
+            case .unhealthy: return .red
+            case .stopped: return .secondary
+            }
+        }()
+        return StatusPill(text: model.health.label, tint: tint,
+                          pulsing: model.health == .loading)
+    }
+
+    private func intStr(_ v: Double?) -> String { v.map { String(Int($0)) } ?? "—" }
+    private func pctStr(_ v: Double?) -> String { v.map { "\(Int(($0 * 100).rounded()))%" } ?? "—" }
+    private func rateStr(_ v: Double?) -> String { v.map { String(format: "%.0f tok/s", $0) } ?? "—" }
 
     private var header: some View {
         HStack(alignment: .center) {

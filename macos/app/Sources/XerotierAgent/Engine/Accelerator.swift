@@ -14,6 +14,17 @@ struct AcceleratorInfo {
     var budgetDisplay: String { Self.bytes(workingSetBytes) }
     var totalRAMDisplay: String { Self.bytes(totalRAMBytes) }
 
+    /// The Metal recommended working-set budget as a fraction of total unified
+    /// memory — a sensible default for vLLM's --gpu-memory-utilization (e.g. an
+    /// ~11.8 GB budget on a 16 GB Mac ≈ 0.74).
+    var recommendedUtilization: Double {
+        guard totalRAMBytes > 0 else { return 0.9 }
+        return min(0.95, Double(workingSetBytes) / Double(totalRAMBytes))
+    }
+    var recommendedUtilizationString: String {
+        String(format: "%.2f", recommendedUtilization)
+    }
+
     private static func bytes(_ value: UInt64) -> String {
         ByteCountFormatter.string(fromByteCount: Int64(value), countStyle: .memory)
     }

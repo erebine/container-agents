@@ -17,7 +17,6 @@ enum Templates {
     ENROLLMENT_STATE_FILE="${HOME}/.config/xerotier/enrollment.json"
     AGENT_BIN="${XEROTIER_AGENT_BIN:-${HOME}/.local/bin/xerotier-xim-agent}"
 
-    export XEROTIER_AGENT_AUTO_CONFIGURE_GPU=0
     export XEROTIER_AGENT_VLLM_PATH="${XEROTIER_AGENT_VLLM_PATH:-${HOME}/.local/bin/xerotier-vllm}"
 
     build_enroll_args() {
@@ -37,6 +36,15 @@ enum Templates {
         [[ -n "${XEROTIER_AGENT_MAX_CONCURRENT}" ]] && args+=("--max-concurrent" "${XEROTIER_AGENT_MAX_CONCURRENT}")
         [[ -n "${XEROTIER_AGENT_VLLM_PATH}" ]] && args+=("--vllm-path" "${XEROTIER_AGENT_VLLM_PATH}")
         [[ -n "${XEROTIER_AGENT_METRICS_PORT}" ]] && args+=("--metrics-port" "${XEROTIER_AGENT_METRICS_PORT}")
+        # Forward the agent's native tuning flags from env so they reliably reach
+        # vLLM (the agent also reads these env vars, but passing the flags removes
+        # any doubt about precedence).
+        [[ -n "${XEROTIER_AGENT_GPU_MEMORY_UTILIZATION}" ]] && args+=("--gpu-memory-utilization" "${XEROTIER_AGENT_GPU_MEMORY_UTILIZATION}")
+        [[ -n "${XEROTIER_AGENT_MAX_NUM_SEQS}" ]] && args+=("--max-num-seqs" "${XEROTIER_AGENT_MAX_NUM_SEQS}")
+        [[ -n "${XEROTIER_AGENT_MAX_MODEL_LEN}" ]] && args+=("--max-model-len" "${XEROTIER_AGENT_MAX_MODEL_LEN}")
+        [[ -n "${XEROTIER_AGENT_VLLM_QUANTIZATION}" ]] && args+=("--quantization" "${XEROTIER_AGENT_VLLM_QUANTIZATION}")
+        [[ -n "${XEROTIER_AGENT_KV_CACHE_BACKEND}" ]] && args+=("--kv-cache-backend" "${XEROTIER_AGENT_KV_CACHE_BACKEND}")
+        [[ -n "${XEROTIER_AGENT_MODEL_CACHE_MAX_SIZE_GB}" ]] && args+=("--model-cache-max-size-gb" "${XEROTIER_AGENT_MODEL_CACHE_MAX_SIZE_GB}")
         if [[ "${XEROTIER_AGENT_DISABLE_METRICS_SERVER}" == "1" ]] || [[ "${XEROTIER_AGENT_DISABLE_METRICS_SERVER}" == "true" ]]; then
             args+=("--disable-metrics-server")
         fi

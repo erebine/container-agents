@@ -15,12 +15,30 @@ enum ServiceController {
 
     /// Inspect launchd for the agent's current state.
     static func status() async -> ServiceState {
+        await statusDetail().state
+    }
+
+    struct StatusDetail {
+        var state: ServiceState
+        var runs: Int          // total launch count (climbs on KeepAlive restarts)
+        var lastExitCode: Int  // last process exit status (0 = clean)
+    }
+
+    /// Like status(), plus launchd's run count and last exit code — used to
+    /// detect crash/restart loops.
+    static func statusDetail() async -> StatusDetail {
         let (code, out) = await Shell.capture("/bin/launchctl", ["print", Paths.serviceTarget])
-        guard code == 0 else { return .stopped }
-        // "state = running" appears while the program is actually executing;
-        // a loaded-but-waiting job (KeepAlive between restarts) still counts.
-        if out.contains("state = running") { return .running }
-        return out.contains("pid = ") ? .running : .stopped
+        guard code == 0 else { return StatusDetail(state: .stopped, runs: 0, lastExitCode: 0) }
+        let running = out.contains("state = running") || out.contains("pid = ")
+        return StatusDetail(state: running ? .running : .stopped,
+                            runs: intField(out, "runs = "),
+                            lastExitCode: intField(out, "last exit code = "))
+    }
+
+    private static func intField(_ text: String, _ key: String) -> Int {
+        guard let r = text.range(of: key) else { return 0 }
+        let rest = text[r.upperBound...].prefix { $0.isNumber || $0 == "-" }
+        return Int(rest) ?? 0
     }
 
     /// Build the LaunchAgent plist from current settings and write it out.
@@ -33,27 +51,29 @@ enum ServiceController {
             let v = value.trimmingCharacters(in: .whitespaces)
             if !v.isEmpty { env[key] = v }
         }
+        // The agent reads these directly from the environment (each option
+        // documents an `env:` equivalent), so we set the dedicated vars rather
+        // than duplicating vLLM flags via --vllm-arg. Empty values are omitted,
+        // which lets the agent apply its own default / auto-configuration.
         put("XEROTIER_AGENT_JOIN_KEY", settings.joinKey)
         put("XEROTIER_AGENT_MAX_CONCURRENT", settings.maxConcurrent)
         put("XEROTIER_AGENT_LOG_LEVEL", settings.logLevel)
         put("XEROTIER_AGENT_METRICS_PORT", settings.metricsPort)
-
-        // Compose the extra vLLM args, folding in the tuning the user chose so it
-        // overrides the agent's auto-detected defaults. The entrypoint splits
-        // this on spaces into individual --vllm-arg= values.
-        var vllmArgs = settings.vllmArgs.trimmingCharacters(in: .whitespaces)
-        func appendArg(_ flag: String, _ value: String) {
-            let v = value.trimmingCharacters(in: .whitespaces)
-            guard !v.isEmpty else { return }
-            if !vllmArgs.isEmpty { vllmArgs += " " }
-            vllmArgs += "\(flag) \(v)"
-        }
-        appendArg("--gpu-memory-utilization", settings.gpuMemoryUtilization)
-        appendArg("--max-num-seqs", settings.maxNumSeqs)
-        put("XEROTIER_AGENT_VLLM_ARGS", vllmArgs)
+        put("XEROTIER_AGENT_GPU_MEMORY_UTILIZATION", normalizedFraction(settings.gpuMemoryUtilization))
+        put("XEROTIER_AGENT_MAX_NUM_SEQS", settings.maxNumSeqs)
+        put("XEROTIER_AGENT_MAX_MODEL_LEN", settings.maxModelLen)
+        put("XEROTIER_AGENT_VLLM_QUANTIZATION", settings.quantization)
+        put("XEROTIER_AGENT_KV_CACHE_BACKEND", settings.kvCacheBackend)
+        put("XEROTIER_AGENT_MODEL_CACHE_MAX_SIZE_GB", settings.modelCacheMaxSizeGB)
+        put("XEROTIER_AGENT_VLLM_ARGS", settings.vllmArgs)
         put("XEROTIER_AGENT_VLLM_ENV", settings.vllmEnv)
         if settings.allowInsecure { env["XEROTIER_AGENT_ALLOW_INSECURE"] = "1" }
         if settings.disableMetrics { env["XEROTIER_AGENT_DISABLE_METRICS_SERVER"] = "1" }
+        if settings.speculativeEnabled {
+            env["XEROTIER_AGENT_SPECULATIVE_ENABLED"] = "1"
+            put("XEROTIER_AGENT_SPECULATIVE_METHOD", settings.speculativeMethod)
+            put("XEROTIER_AGENT_SPECULATIVE_TOKENS", settings.speculativeTokens)
+        }
 
         let plist: [String: Any] = [
             "Label": Paths.label,
@@ -108,10 +128,69 @@ enum ServiceController {
         }
     }
 
+    /// (Re)write the entrypoint and plist together. Re-rendering the entrypoint
+    /// on every apply ensures existing installs pick up template changes (e.g.
+    /// new flag forwarding) without a full reinstall.
+    static func applyConfig(settings: AgentSettings) throws {
+        try renderEntrypoint()
+        try writePlist(settings: settings)
+    }
+
+    static func renderEntrypoint() throws {
+        try FileManager.default.createDirectory(at: Paths.binDir, withIntermediateDirectories: true)
+        try Templates.entrypoint.write(to: Paths.entrypoint, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755],
+                                              ofItemAtPath: Paths.entrypoint.path)
+    }
+
     /// Delete the local enrollment state so the next start re-enrolls (used to
     /// re-bootstrap with a new join key).
     static func clearEnrollment() {
         try? FileManager.default.removeItem(at: Paths.enrollmentState)
+    }
+
+    /// Read the installed plist's environment back into AgentSettings so the UI
+    /// reflects the actual running configuration (and Apply & Restart rewrites a
+    /// complete plist instead of wiping the join key with session defaults).
+    static func loadSettings() -> AgentSettings? {
+        guard let data = try? Data(contentsOf: Paths.plist),
+              let obj = try? PropertyListSerialization.propertyList(from: data, format: nil),
+              let plist = obj as? [String: Any],
+              let env = plist["EnvironmentVariables"] as? [String: String]
+        else { return nil }
+
+        var s = AgentSettings()
+        s.joinKey = env["XEROTIER_AGENT_JOIN_KEY"] ?? ""
+        s.maxConcurrent = env["XEROTIER_AGENT_MAX_CONCURRENT"] ?? ""
+        if let v = env["XEROTIER_AGENT_LOG_LEVEL"] { s.logLevel = v }
+        if let v = env["XEROTIER_AGENT_METRICS_PORT"] { s.metricsPort = v }
+        s.gpuMemoryUtilization = env["XEROTIER_AGENT_GPU_MEMORY_UTILIZATION"] ?? ""
+        s.maxNumSeqs = env["XEROTIER_AGENT_MAX_NUM_SEQS"] ?? ""
+        s.maxModelLen = env["XEROTIER_AGENT_MAX_MODEL_LEN"] ?? ""
+        s.quantization = env["XEROTIER_AGENT_VLLM_QUANTIZATION"] ?? ""
+        s.kvCacheBackend = env["XEROTIER_AGENT_KV_CACHE_BACKEND"] ?? ""
+        s.modelCacheMaxSizeGB = env["XEROTIER_AGENT_MODEL_CACHE_MAX_SIZE_GB"] ?? ""
+        s.speculativeEnabled = boolEnv(env["XEROTIER_AGENT_SPECULATIVE_ENABLED"])
+        s.speculativeMethod = env["XEROTIER_AGENT_SPECULATIVE_METHOD"] ?? ""
+        s.speculativeTokens = env["XEROTIER_AGENT_SPECULATIVE_TOKENS"] ?? ""
+        s.vllmArgs = env["XEROTIER_AGENT_VLLM_ARGS"] ?? ""
+        s.vllmEnv = env["XEROTIER_AGENT_VLLM_ENV"] ?? ""
+        s.allowInsecure = boolEnv(env["XEROTIER_AGENT_ALLOW_INSECURE"])
+        s.disableMetrics = boolEnv(env["XEROTIER_AGENT_DISABLE_METRICS_SERVER"])
+        return s
+    }
+
+    private static func boolEnv(_ v: String?) -> Bool {
+        guard let v = v?.lowercased() else { return false }
+        return v == "1" || v == "true"
+    }
+
+    /// Accept "90" or "0.9" for a 0–1 fraction; values > 1 are treated as a
+    /// percentage.
+    static func normalizedFraction(_ s: String) -> String {
+        let t = s.trimmingCharacters(in: .whitespaces)
+        guard let d = Double(t), d > 1 else { return t }
+        return String(d / 100)
     }
 
     static func uninstall(purge: Bool, emit: @escaping LogEmit) async {

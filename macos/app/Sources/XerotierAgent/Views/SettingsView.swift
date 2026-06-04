@@ -25,23 +25,56 @@ struct SettingsView: View {
             }
 
             Section("Runtime") {
-                TextField("Max concurrent jobs", text: $model.settings.maxConcurrent)
+                TextField("Max concurrent requests", text: $model.settings.maxConcurrent,
+                          prompt: Text("auto"))
+                Text("XEROTIER_AGENT_MAX_CONCURRENT. Leave blank to let the agent auto-configure it from the GPU/model (usually > 1).")
+                    .font(.caption).foregroundStyle(.secondary)
                 Picker("Log level", selection: $model.settings.logLevel) {
                     ForEach(AgentSettings.logLevels, id: \.self) { Text($0).tag($0) }
                 }
                 Toggle("Allow insecure transport", isOn: $model.settings.allowInsecure)
             }
 
-            Section("GPU & vLLM tuning") {
-                TextField("Memory utilization", text: $model.settings.gpuMemoryUtilization,
+            Section("GPU & model tuning") {
+                TextField("GPU memory utilization", text: $model.settings.gpuMemoryUtilization,
                           prompt: Text("0.90"))
-                Text("Fraction (0–1) of the \(model.acceleratorName) budget (\(model.vramBudget)) vLLM may use, passed as --gpu-memory-utilization. Leave blank to use the agent's default.")
+                Text("Fraction (0–1) of the \(model.acceleratorName) budget (\(model.vramBudget)) vLLM may use. Accepts 0.9 or 90. Blank = agent default (0.95).")
                     .font(.caption).foregroundStyle(.secondary)
 
                 TextField("Max sequences", text: $model.settings.maxNumSeqs,
-                          prompt: Text("256"))
-                Text("Max concurrent sequences vLLM batches (--max-num-seqs). Lower it to maximize context length per request. Leave blank to use the agent's default.")
+                          prompt: Text("64"))
+                Text("Max concurrent sequences (--max-num-seqs). Lower it to free KV-cache memory for longer context. Blank = agent default (64).")
                     .font(.caption).foregroundStyle(.secondary)
+
+                TextField("Max context length", text: $model.settings.maxModelLen,
+                          prompt: Text("auto"))
+                Text("Maximum model context length (--max-model-len). Blank = derived from the model.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section("Advanced") {
+                Picker("Quantization", selection: $model.settings.quantization) {
+                    Text("Auto").tag("")
+                    ForEach(AgentSettings.quantizations, id: \.self) { Text($0).tag($0) }
+                }
+                Picker("KV cache backend", selection: $model.settings.kvCacheBackend) {
+                    Text("Default").tag("")
+                    ForEach(AgentSettings.kvBackends, id: \.self) { Text($0).tag($0) }
+                }
+                TextField("Model cache size (GB)", text: $model.settings.modelCacheMaxSizeGB,
+                          prompt: Text("100"))
+            }
+
+            Section("Speculative decoding") {
+                Toggle("Enable speculative decoding", isOn: $model.settings.speculativeEnabled)
+                if model.settings.speculativeEnabled {
+                    Picker("Method", selection: $model.settings.speculativeMethod) {
+                        Text("Default").tag("")
+                        ForEach(AgentSettings.speculativeMethods, id: \.self) { Text($0).tag($0) }
+                    }
+                    TextField("Tokens per step", text: $model.settings.speculativeTokens,
+                              prompt: Text("5"))
+                }
             }
 
             Section("Metrics") {
@@ -52,7 +85,7 @@ struct SettingsView: View {
 
             Section("vLLM") {
                 TextField("Extra vLLM args", text: $model.settings.vllmArgs,
-                          prompt: Text("--max-model-len 8192"))
+                          prompt: Text("--enforce-eager"))
                 TextField("Extra vLLM env", text: $model.settings.vllmEnv,
                           prompt: Text("KEY=VALUE KEY2=VALUE2"))
                 Text("Passed through the xerotier-vllm wrapper to vLLM.")
@@ -60,14 +93,23 @@ struct SettingsView: View {
             }
 
             Section {
+                ForEach(model.settingsErrors, id: \.self) { err in
+                    Label(err, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption).foregroundStyle(.red)
+                }
                 HStack {
-                    Text("Changes apply on the next service restart.")
-                        .font(.caption).foregroundStyle(.secondary)
+                    if model.settingsDirty {
+                        Label("Unsaved changes", systemImage: "pencil.circle")
+                            .font(.caption).foregroundStyle(.orange)
+                    } else {
+                        Text("Changes apply on the next service restart.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                     Spacer()
                     Button("Apply & Restart") {
                         Task { await model.applyAndRestart() }
                     }
-                    .disabled(model.installState != .installed)
+                    .disabled(!model.canApply)
                 }
             }
         }
