@@ -27,6 +27,11 @@ obtain a join key from the Xerotier dashboard.
 Documentation for running private agents can be found in the [docs](https://xerotier.ai/docs/private-agents),
 which provides detailed information on how to use and customize the compose files for your specific use case.
 
+> **NVIDIA GPUs:** to run with Docker or Podman, install the
+> [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+> first so the container runtime can access the GPU. Without it, the agent
+> cannot reach CUDA inside the container.
+
 Basic execution is as simple as running the following commands in your terminal:
 
 ``` shell
@@ -41,12 +46,12 @@ sudo podman logs xim-vllm-rocm -f
 * The third command starts the new containers in detached mode.
 * The last command allows you to view the logs of the running container in real-time.
 
-## MacOS Support
+## macOS Desktop App
 
-On Apple Silicon, Xerotier XIM runs as a native macOS application that installs,
-configures, and controls the agent with Metal-accelerated vLLM. See the
-[MacOS README](macos/README.md) for requirements and setup.
+On Apple Silicon, Xerotier XIM is also available as a native macOS desktop
+application that installs, runs, and manages the agent (Metal-accelerated vLLM)
+and provides a full client for the Xerotier cloud API.
 
-<div style="text-align: center;">
-<img src="xerotier-macos-desktop.png" alt="MacOS Desktop App" width="50%">
-</div>
+Download the latest **`Xerotier-<version>.dmg`** from the
+[latest release](https://github.com/cloudnull/xerotier-public/releases/latest),
+drag **Xerotier.app** into Applications, open it, and enter your join key.

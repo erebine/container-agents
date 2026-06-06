@@ -48,6 +48,15 @@
 #   To persist across reboots, add to /etc/sysctl.d/99-xerotier.conf:
 #     net.core.wmem_max = 4194304
 #     net.core.rmem_max = 4194304
+#
+#   The devices section needs to be configured according to your container runtime:
+#     - For Docker with NVIDIA Container Toolkit:
+#         devices:
+#           - driver: nvidia
+#             capabilities: [gpu]
+#    - For Podman with NVIDIA Container Toolkit:
+#         devices:
+#           - nvidia.com/gpu=all
 
 services:
   agent:
