@@ -57,7 +57,7 @@
 
 services:
   agent:
-    image: ${DOCKER_REGISTRY:-ghcr.io/cloudnull/xerotier}-public/xim-vllm-rocm:${VERSION:-latest}
+    image: ${DOCKER_REGISTRY:-ghcr.io/xerotier/container-agents}/xim-vllm-rocm:${VERSION:-latest}
     container_name: xim-vllm-rocm
     network_mode: host
     ipc: host

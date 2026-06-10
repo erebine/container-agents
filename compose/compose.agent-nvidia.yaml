@@ -60,7 +60,7 @@
 
 services:
   agent:
-    image: ${DOCKER_REGISTRY:-ghcr.io/cloudnull/xerotier}-public/xim-vllm-cuda:${VERSION:-latest}
+    image: ${DOCKER_REGISTRY:-ghcr.io/xerotier/container-agents}/xim-vllm-cuda:${VERSION:-latest}
     container_name: xim-vllm-cuda
     network_mode: host
     ipc: host

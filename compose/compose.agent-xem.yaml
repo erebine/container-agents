@@ -29,7 +29,7 @@
 #                              [REQUIRED] Unique per-project name for this agent
 #                              (kebab-case or alphanumeric, max 48 chars)
 #   XEM_IMAGE                  Container image name
-#                              (default: xerotier-xem:latest)
+#                              (default: ghcr.io/xerotier/container-agents/xem:latest)
 #   XEM_AGENT_LOG_LEVEL        Logging level: trace, debug, info, warning,
 #                              error, critical (default: info)
 #   XEM_AGENT_MAX_CONCURRENT   Max concurrent tool executions (default: 20)
@@ -44,7 +44,7 @@
 
 services:
   xem-agent:
-    image: ${XEM_IMAGE:-xerotier-xem:latest}
+    image: ${XEM_IMAGE:-ghcr.io/xerotier/container-agents/xem:latest}
     container_name: xerotier-xem-agent
     restart: unless-stopped
     environment:

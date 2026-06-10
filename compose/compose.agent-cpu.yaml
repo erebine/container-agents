@@ -7,10 +7,10 @@
 # cache sidecar is required.
 #
 # IMAGE OPTIONS:
-#   AMD ZenTorch optimized:
-#     DOCKER_REGISTRY=ghcr.io/cloudnull/xerotier VERSION=latest
-#     XEROTIER_CPU_IMAGE=xerotier-xim-amd
-#     -> ghcr.io/cloudnull/xerotier-public/xerotier-xim-amd-cpu:latest
+#   Default: ghcr.io/xerotier/container-agents/xim-vllm-cpu:latest
+#   Override with DOCKER_REGISTRY=... and VERSION=...
+#   For AMD ZenTorch optimized CPU inference use
+#   compose.agent-amd-cpu-zendnn.yaml instead.
 #
 # QUICK START:
 #   1. Get a join key from your Xerotier dashboard:
@@ -34,7 +34,6 @@
 #
 # ENVIRONMENT VARIABLES:
 #   XEROTIER_AGENT_JOIN_KEY              [REQUIRED] Join key from Xerotier dashboard (first run only)
-#   XEROTIER_CPU_IMAGE                   Container image name (default: xerotier-xim-amd-cpu)
 #   XEROTIER_AGENT_MAX_CONCURRENT        Optional ceiling for concurrent requests (auto-configured when not set)
 #   XEROTIER_AGENT_LOG_LEVEL             Logging level: trace, debug, info, warning, error (default: info)
 #   XEROTIER_AGENT_MODEL_CACHE_MAX_SIZE_GB Local model cache size in GB (default: 100)
@@ -64,7 +63,7 @@
 
 services:
   agent:
-    image: ${DOCKER_REGISTRY:-ghcr.io/cloudnull/xerotier}-public/xim-vllm-cpu:${VERSION:-latest}
+    image: ${DOCKER_REGISTRY:-ghcr.io/xerotier/container-agents}/xim-vllm-cpu:${VERSION:-latest}
     container_name: xim-vllm-cpu
     network_mode: host
     ipc: host
