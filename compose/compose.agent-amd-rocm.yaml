@@ -1,19 +1,19 @@
 # SPDX-License-Identifier: MIT
-# Xerotier Agent - AMD GPU ROCm Stack
+# Erebine Agent - AMD GPU ROCm Stack
 #
-# Deploys a XIM AMD GPU node using ROCm with vLLM native CPU KV cache
+# Deploys a EIM AMD GPU node using ROCm with vLLM native CPU KV cache
 # offloading. See internal-docs/configuration/kv-offloading.md for details.
 #
 # QUICK START:
-#   1. Get a join key from your Xerotier dashboard:
+#   1. Get a join key from your Erebine dashboard:
 #      Dashboard -> Infrastructure -> Agents -> Generate Join Key
 #
 #   2. Create host directories with correct permissions:
-#      sudo mkdir -p /data/xerotier/models /data/xerotier/config
-#      sudo chown -R 5152:5152 /data/xerotier
+#      sudo mkdir -p /data/erebine/models /data/erebine/config
+#      sudo chown -R 5152:5152 /data/erebine
 #
 #   3. Set environment variables or create a .env file:
-#      export XEROTIER_AGENT_JOIN_KEY=xjk_your_key_here
+#      export EREBINE_AGENT_JOIN_KEY=ejk_your_key_here
 #
 #   4. Start the agent:
 #      sudo -E podman compose -f docker-compose.agent-amd-rocm.yaml up -d
@@ -26,20 +26,20 @@
 #
 # ENROLLMENT WORKFLOW:
 #   - On first start, the agent enrolls using your join key
-#   - Enrollment state is persisted to /data/xerotier/config
+#   - Enrollment state is persisted to /data/erebine/config
 #   - On subsequent restarts, the agent reconnects automatically
-#   - You can remove XEROTIER_AGENT_JOIN_KEY after successful enrollment
+#   - You can remove EREBINE_AGENT_JOIN_KEY after successful enrollment
 #
 # ENVIRONMENT VARIABLES:
-#   XEROTIER_AGENT_JOIN_KEY              [REQUIRED] Join key from Xerotier dashboard (first run only)
-#   HIP_VISIBLE_DEVICES                  GPU device indices to use (default: 0)
-#   XEROTIER_AGENT_MAX_CONCURRENT        Optional ceiling for concurrent requests (auto-configured when not set)
-#   XEROTIER_AGENT_TENSOR_PARALLEL_SIZE  Tensor parallel size for multi-GPU (default: 1)
-#   XEROTIER_AGENT_GPU_MEMORY_UTILIZATION GPU memory utilization fraction (default: 0.90)
-#   XEROTIER_AGENT_MAX_MODEL_LEN         Maximum sequence length (default: model default)
-#   XEROTIER_AGENT_MODEL_CACHE_MAX_SIZE_GB Local model cache size in GB (default: 100)
-#   XEROTIER_AGENT_LOG_LEVEL             Logging level: trace, debug, info, warning, error (default: info)
-#   SHM_SIZE                             Shared memory size in bytes (default: 8589934592 = 8GB)
+#   EREBINE_AGENT_JOIN_KEY                 [REQUIRED] Join key from Erebine dashboard (first run only)
+#   HIP_VISIBLE_DEVICES                    GPU device indices to use (default: 0)
+#   EREBINE_AGENT_MAX_CONCURRENT           Optional ceiling for concurrent requests (auto-configured when not set)
+#   EREBINE_AGENT_TENSOR_PARALLEL_SIZE     Tensor parallel size for multi-GPU (default: 1)
+#   EREBINE_AGENT_GPU_MEMORY_UTILIZATION   GPU memory utilization fraction (default: 0.90)
+#   EREBINE_AGENT_MAX_MODEL_LEN            Maximum sequence length (default: model default)
+#   EREBINE_AGENT_MODEL_CACHE_MAX_SIZE_GB  Local model cache size in GB (default: 100)
+#   EREBINE_AGENT_LOG_LEVEL                Logging level: trace, debug, info, warning, error (default: info)
+#   SHM_SIZE                               Shared memory size in bytes (default: 8589934592 = 8GB)
 #
 # KERNEL SOCKET BUFFER TUNING (optional):
 #   The agent sets ZeroMQ socket buffers to 4 MiB for streaming throughput.
@@ -51,14 +51,14 @@
 #     sudo sysctl -w net.core.wmem_max=4194304
 #     sudo sysctl -w net.core.rmem_max=4194304
 #
-#   To persist across reboots, add to /etc/sysctl.d/99-xerotier.conf:
+#   To persist across reboots, add to /etc/sysctl.d/99-erebine.conf:
 #     net.core.wmem_max = 4194304
 #     net.core.rmem_max = 4194304
 
 services:
   agent:
-    image: ${DOCKER_REGISTRY:-ghcr.io/xerotier/container-agents}/xim-vllm-rocm:${VERSION:-latest}
-    container_name: xim-vllm-rocm
+    image: ${DOCKER_REGISTRY:-ghcr.io/erebine/container-agents}/eim-vllm-rocm:${VERSION:-latest}
+    container_name: eim-vllm-rocm
     network_mode: host
     ipc: host
     privileged: true
@@ -77,18 +77,20 @@ services:
       - render
     volumes:
       # Persistent model cache
-      - /data/xerotier/models:/var/lib/inference/.cache/xerotier/models
+      - /data/erebine/models:/var/lib/inference/.cache/erebine/models
+      # Persistent vLLM compile/JIT cache (VLLM_CACHE_ROOT) -- avoids repaying warmup on restart
+      - /data/erebine/vllm-cache:/var/lib/inference/.cache/erebine/vllm
       # Persistent enrollment state
-      - /data/xerotier/config:/var/lib/inference/.config/xerotier
+      - /data/erebine/config:/var/lib/inference/.config/erebine
     environment:
       # Agent Enrollment [REQUIRED for first run]
-      XEROTIER_AGENT_JOIN_KEY: "${XEROTIER_AGENT_JOIN_KEY:-}"
+      EREBINE_AGENT_JOIN_KEY: "${EREBINE_AGENT_JOIN_KEY:-}"
       # ROCm GPU Configuration
       HIP_VISIBLE_DEVICES: "${HIP_VISIBLE_DEVICES:-0}"
       # Model is assigned from the dashboard during enrollment
-      XEROTIER_AGENT_MAX_MODEL_LEN: "${XEROTIER_AGENT_MAX_MODEL_LEN:-}"
-      XEROTIER_AGENT_TENSOR_PARALLEL_SIZE: "${XEROTIER_AGENT_TENSOR_PARALLEL_SIZE:-1}"
-      XEROTIER_AGENT_GPU_MEMORY_UTILIZATION: "${XEROTIER_AGENT_GPU_MEMORY_UTILIZATION:-0.90}"
-      XEROTIER_AGENT_MAX_CONCURRENT: "${XEROTIER_AGENT_MAX_CONCURRENT:-}"
-      XEROTIER_AGENT_LOG_LEVEL: "${XEROTIER_AGENT_LOG_LEVEL:-info}"
+      EREBINE_AGENT_MAX_MODEL_LEN: "${EREBINE_AGENT_MAX_MODEL_LEN:-}"
+      EREBINE_AGENT_TENSOR_PARALLEL_SIZE: "${EREBINE_AGENT_TENSOR_PARALLEL_SIZE:-1}"
+      EREBINE_AGENT_GPU_MEMORY_UTILIZATION: "${EREBINE_AGENT_GPU_MEMORY_UTILIZATION:-0.90}"
+      EREBINE_AGENT_MAX_CONCURRENT: "${EREBINE_AGENT_MAX_CONCURRENT:-}"
+      EREBINE_AGENT_LOG_LEVEL: "${EREBINE_AGENT_LOG_LEVEL:-info}"
     restart: unless-stopped

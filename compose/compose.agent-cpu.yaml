@@ -1,51 +1,51 @@
 # SPDX-License-Identifier: MIT
-# Xerotier Agent - CPU Inference Stack
+# Erebine Agent - CPU Inference Stack
 #
-# Deploys a XIM CPU node for inference without GPU acceleration.
+# Deploys a EIM CPU node for inference without GPU acceleration.
 # ZenTorch optimization for AMD EPYC CPUs is available as an opt-in image tag.
 # KV cache lives in host RAM and is managed directly by vLLM; no external
 # cache sidecar is required.
 #
 # IMAGE OPTIONS:
-#   Default: ghcr.io/xerotier/container-agents/xim-vllm-cpu:latest
+#   Default: ghcr.io/erebine/container-agents/eim-vllm-cpu:latest
 #   Override with DOCKER_REGISTRY=... and VERSION=...
 #   For AMD ZenTorch optimized CPU inference use
-#   compose.agent-amd-cpu-zendnn.yaml instead.
+#   docker-compose.agent-amd-cpu-zendnn.yaml instead.
 #
 # QUICK START:
-#   1. Get a join key from your Xerotier dashboard:
+#   1. Get a join key from your Erebine dashboard:
 #      Dashboard -> Infrastructure -> Agents -> Generate Join Key
 #
 #   2. Set your join key:
-#      export XEROTIER_AGENT_JOIN_KEY=xjk_your_key_here
+#      export EREBINE_AGENT_JOIN_KEY=ejk_your_key_here
 #
 #   3. Create host directories with correct permissions:
-#      sudo mkdir -p /data/xerotier/models /data/xerotier/config
-#      sudo chown -R 5152:5152 /data/xerotier
+#      sudo mkdir -p /data/erebine/models /data/erebine/config /data/erebine/vllm-cache
+#      sudo chown -R 5152:5152 /data/erebine
 #
 #   4. Start the agent:
 #      docker compose -f docker-compose.agent-cpu.yaml up -d
 #
 # ENROLLMENT WORKFLOW:
 #   - On first start, the agent enrolls using your join key
-#   - Enrollment state is persisted to /data/xerotier/config
+#   - Enrollment state is persisted to /data/erebine/config
 #   - On subsequent restarts, the agent reconnects automatically
-#   - You can remove XEROTIER_AGENT_JOIN_KEY after successful enrollment
+#   - You can remove EREBINE_AGENT_JOIN_KEY after successful enrollment
 #
 # ENVIRONMENT VARIABLES:
-#   XEROTIER_AGENT_JOIN_KEY              [REQUIRED] Join key from Xerotier dashboard (first run only)
-#   XEROTIER_AGENT_MAX_CONCURRENT        Optional ceiling for concurrent requests (auto-configured when not set)
-#   XEROTIER_AGENT_LOG_LEVEL             Logging level: trace, debug, info, warning, error (default: info)
-#   XEROTIER_AGENT_MODEL_CACHE_MAX_SIZE_GB Local model cache size in GB (default: 100)
-#   SHM_SIZE                             Shared memory size (default: 90g)
+#   EREBINE_AGENT_JOIN_KEY                 [REQUIRED] Join key from Erebine dashboard (first run only)
+#   EREBINE_AGENT_MAX_CONCURRENT           Optional ceiling for concurrent requests (auto-configured when not set)
+#   EREBINE_AGENT_LOG_LEVEL                Logging level: trace, debug, info, warning, error (default: info)
+#   EREBINE_AGENT_MODEL_CACHE_MAX_SIZE_GB  Local model cache size in GB (default: 100)
+#   SHM_SIZE                               Shared memory size (default: 90g)
 #
-# CPU TUNING (auto-computed by the agent; override via XEROTIER_AGENT_VLLM_ENV if needed):
-#   VLLM_CPU_OMP_THREADS_BIND            CPU thread binding range (auto: 0-{nproc-1})
-#   VLLM_CPU_NUM_OF_RESERVED_CPU         Reserved CPUs for system (auto: 1)
-#   VLLM_CPU_KVCACHE_SPACE               KV cache memory in GB (auto: totalRAM - model - overhead)
-#   OMP_NUM_THREADS                       OpenMP threads (auto: physical core count)
-#   OMP_PROC_BIND                         Pin threads to cores (auto: TRUE)
-#   OMP_WAIT_POLICY                       Thread wait strategy (auto: PASSIVE)
+# CPU TUNING (auto-computed by the agent; override via EREBINE_AGENT_VLLM_ENV if needed):
+#   VLLM_CPU_OMP_THREADS_BIND              CPU thread binding range (auto: 0-{nproc-1})
+#   VLLM_CPU_NUM_OF_RESERVED_CPU           Reserved CPUs for system (auto: 1)
+#   VLLM_CPU_KVCACHE_SPACE                 KV cache memory in GB (auto: totalRAM - model - overhead)
+#   OMP_NUM_THREADS                        OpenMP threads (auto: physical core count)
+#   OMP_PROC_BIND                          Pin threads to cores (auto: TRUE)
+#   OMP_WAIT_POLICY                        Thread wait strategy (auto: PASSIVE)
 #
 # KERNEL SOCKET BUFFER TUNING (optional):
 #   The agent sets ZeroMQ socket buffers to 4 MiB for streaming throughput.
@@ -57,14 +57,14 @@
 #     sudo sysctl -w net.core.wmem_max=4194304
 #     sudo sysctl -w net.core.rmem_max=4194304
 #
-#   To persist across reboots, add to /etc/sysctl.d/99-xerotier.conf:
+#   To persist across reboots, add to /etc/sysctl.d/99-erebine.conf:
 #     net.core.wmem_max = 4194304
 #     net.core.rmem_max = 4194304
 
 services:
   agent:
-    image: ${DOCKER_REGISTRY:-ghcr.io/xerotier/container-agents}/xim-vllm-cpu:${VERSION:-latest}
-    container_name: xim-vllm-cpu
+    image: ${DOCKER_REGISTRY:-ghcr.io/erebine/container-agents}/eim-vllm-cpu:${VERSION:-latest}
+    container_name: eim-vllm-cpu
     network_mode: host
     ipc: host
     privileged: true
@@ -77,12 +77,14 @@ services:
     # No command - entrypoint handles enrollment + run automatically
     volumes:
       # Persistent model cache
-      - /data/xerotier/models:/var/lib/inference/.cache/xerotier/models
+      - /data/erebine/models:/var/lib/inference/.cache/erebine/models
+      # Persistent vLLM compile/JIT cache (VLLM_CACHE_ROOT) -- avoids repaying warmup on restart
+      - /data/erebine/vllm-cache:/var/lib/inference/.cache/erebine/vllm
       # Persistent enrollment state
-      - /data/xerotier/config:/var/lib/inference/.config/xerotier
+      - /data/erebine/config:/var/lib/inference/.config/erebine
     environment:
       # Agent Enrollment [REQUIRED for first run]
-      XEROTIER_AGENT_JOIN_KEY: ${XEROTIER_AGENT_JOIN_KEY:-}
+      EREBINE_AGENT_JOIN_KEY: ${EREBINE_AGENT_JOIN_KEY:-}
       # Agent Configuration
-      XEROTIER_AGENT_LOG_LEVEL: ${XEROTIER_AGENT_LOG_LEVEL:-info}
+      EREBINE_AGENT_LOG_LEVEL: ${EREBINE_AGENT_LOG_LEVEL:-info}
     restart: unless-stopped

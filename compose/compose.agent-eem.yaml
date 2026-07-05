@@ -1,0 +1,70 @@
+# SPDX-License-Identifier: MIT
+# Erebine Agent - EEM Execution Stack
+#
+# Deploys a single EEM (Execution Management) agent that enrolls
+# with an already-running Erebine router and dispatches
+# infrastructure tool calls. Unlike the EIM inference agents this
+# stack does not bundle a GPU or vLLM runtime -- the EEM agent is a
+# lightweight text-only dispatcher.
+#
+# QUICK START:
+#   1. Get a join key from your Erebine dashboard:
+#      Dashboard -> Infrastructure -> Agents -> Generate Join Key
+#
+#   2. Set your join key and router URL:
+#      export EREBINE_AGENT_JOIN_KEY=ejk_your_key_here
+#      export EREBINE_ROUTER_URL=https://router.example.com
+#
+#   3. Create host directories with correct permissions:
+#      sudo mkdir -p /data/erebine-eem/{tools,credentials,state,config}
+#      sudo chown -R 5153:5153 /data/erebine-eem
+#
+#   4. Start the agent:
+#      docker compose -f docker-compose.agent-eem.yaml up -d
+#
+# ENVIRONMENT VARIABLES:
+#   EREBINE_AGENT_JOIN_KEY    [REQUIRED] Join key from Erebine dashboard
+#   EREBINE_ROUTER_URL        [REQUIRED] HTTPS enrollment URL of the router
+#   EREBINE_AGENT_REGISTRATION_NAME
+#                              [REQUIRED] Unique per-project name for this agent
+#                              (kebab-case or alphanumeric, max 48 chars)
+#   EEM_IMAGE                  Container image name
+#                              (default: ghcr.io/erebine/container-agents/eem:latest)
+#   EEM_AGENT_LOG_LEVEL        Logging level: trace, debug, info, warning,
+#                              error, critical (default: info)
+#   EEM_AGENT_MAX_CONCURRENT   Max concurrent tool executions (default: 20)
+#
+# ENROLLMENT WORKFLOW:
+#   - On first start the agent enrolls against the configured router
+#   - The agent generates a persistent Ed25519 signing key on first run
+#     and writes it to /var/lib/eem/.config/erebine/agent-signing-key.hex
+#     (mode 0600) so CURVE rotation acks survive restart.
+#   - Subsequent restarts reuse the signing key; the router verifies
+#     rotation acks against the enrolled public key.
+
+services:
+  eem-agent:
+    image: ${EEM_IMAGE:-ghcr.io/erebine/container-agents/eem:latest}
+    container_name: erebine-eem-agent
+    restart: unless-stopped
+    environment:
+      # Enrollment [REQUIRED for first run]
+      EEM_JOIN_KEY: ${EREBINE_AGENT_JOIN_KEY:?EREBINE_AGENT_JOIN_KEY is required}
+      EEM_ROUTER_URL: ${EREBINE_ROUTER_URL:?EREBINE_ROUTER_URL is required}
+      EEM_REGISTRATION_NAME: ${EREBINE_AGENT_REGISTRATION_NAME:?EREBINE_AGENT_REGISTRATION_NAME is required}
+      # Agent configuration (defaulted by image; override as needed)
+      EEM_LOG_LEVEL: ${EEM_AGENT_LOG_LEVEL:-info}
+      EEM_MAX_CONCURRENT_EXECUTIONS: ${EEM_AGENT_MAX_CONCURRENT:-20}
+      EEM_TOOLS_DIR: /var/lib/erebine/tools
+      EEM_CREDENTIALS_DIR: /var/lib/erebine/credentials
+      EEM_SIGNING_KEY_PATH: /var/lib/eem/.config/erebine/agent-signing-key.hex
+    volumes:
+      # Tool bundles and workspace credentials (operator-managed)
+      - /data/erebine-eem/tools:/var/lib/erebine/tools:ro
+      - /data/erebine-eem/credentials:/var/lib/erebine/credentials:ro
+      # Runtime state (leases, queues, offline fail-safe)
+      - /data/erebine-eem/state:/var/lib/erebine/state
+      # Persistent signing key + enrollment state
+      - /data/erebine-eem/config:/var/lib/eem/.config/erebine
+
+networks: {}

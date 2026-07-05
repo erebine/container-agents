@@ -9,7 +9,7 @@
 #      Dashboard -> Infrastructure -> Agents -> Generate Join Key
 #
 #   2. Create host directories with correct permissions:
-#      sudo mkdir -p /data/erebine/models /data/erebine/config /data/erebine/vllm-cache
+#      sudo mkdir -p /data/erebine/agent{0,1}/models /data/erebine/agent{0,1}/config /data/erebine/agent{0,1}/vllm-cache
 #      sudo chown -R 5152:5152 /data/erebine
 #
 #   3. Set environment variables or create a .env file:
@@ -51,11 +51,9 @@
 #     net.core.rmem_max = 4194304
 
 services:
-  agent:
+  agent0:
     image: ${DOCKER_REGISTRY:-ghcr.io/erebine/container-agents}/eim-vllm-cuda:${VERSION:-latest}
-    container_name: eim-vllm-cuda
-    network_mode: host
-    ipc: host
+    container_name: eim-vllm-cuda-0
     privileged: true
     shm_size: ${SHM_SIZE:-90g}
     # For Docker Compose v2.3+ with NVIDIA Container Toolkit, use the following deploy section to request GPUs
@@ -67,15 +65,64 @@ services:
               capabilities: [gpu]
     volumes:
       # Persistent model cache
-      - /data/erebine/models:/var/lib/inference/.cache/erebine/models
+      - /data/erebine/agent0/models:/var/lib/inference/.cache/erebine/models
       # Persistent vLLM compile/JIT cache (VLLM_CACHE_ROOT) -- avoids repaying warmup on restart
-      - /data/erebine/vllm-cache:/var/lib/inference/.cache/erebine/vllm
+      - /data/erebine/agent0/vllm-cache:/var/lib/inference/.cache/erebine/vllm
       # Persistent enrollment state
-      - /data/erebine/config:/var/lib/inference/.config/erebine
+      - /data/erebine/agent0/config:/var/lib/inference/.config/erebine
     environment:
-      # Agent Enrollment [REQUIRED for first run]
-      EREBINE_AGENT_JOIN_KEY: "${EREBINE_AGENT_JOIN_KEY:-}"
       # Model is assigned from the dashboard during enrollment
       EREBINE_AGENT_LOG_LEVEL: "${EREBINE_AGENT_LOG_LEVEL:-info}"
-      EREBINE_AGENT_VLLM_DISABLE_CUSTOM_ALL_REDUCE: "true"
+      EREBINE_AGENT_JOIN_KEY: "${EREBINE_AGENT_JOIN_KEY:-}"
+      EREBINE_AGENT_GPU_MEMORY_UTILIZATION: "0.30"
+    restart: unless-stopped
+  agent1:
+    image: ${DOCKER_REGISTRY:-ghcr.io/erebine/container-agents}/eim-vllm-cuda:${VERSION:-latest}
+    container_name: eim-vllm-cuda-1
+    privileged: true
+    shm_size: ${SHM_SIZE:-90g}
+    # For Docker Compose v2.3+ with NVIDIA Container Toolkit, use the following deploy section to request GPUs
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+    volumes:
+      # Persistent model cache
+      - /data/erebine/agent1/models:/var/lib/inference/.cache/erebine/models
+      # Persistent vLLM compile/JIT cache (VLLM_CACHE_ROOT) -- avoids repaying warmup on restart
+      - /data/erebine/agent1/vllm-cache:/var/lib/inference/.cache/erebine/vllm
+      # Persistent enrollment state
+      - /data/erebine/agent1/config:/var/lib/inference/.config/erebine
+    environment:
+      # Model is assigned from the dashboard during enrollment
+      EREBINE_AGENT_LOG_LEVEL: "${EREBINE_AGENT_LOG_LEVEL:-info}"
+      EREBINE_AGENT_JOIN_KEY: "${EREBINE_AGENT_JOIN_KEY:-}"
+      EREBINE_AGENT_GPU_MEMORY_UTILIZATION: "0.30"
+    restart: unless-stopped
+  agent2:
+    image: ${DOCKER_REGISTRY:-ghcr.io/erebine/container-agents}/eim-vllm-cuda:${VERSION:-latest}
+    container_name: eim-vllm-cuda-2
+    privileged: true
+    shm_size: ${SHM_SIZE:-90g}
+    # For Docker Compose v2.3+ with NVIDIA Container Toolkit, use the following deploy section to request GPUs
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+    volumes:
+      # Persistent model cache
+      - /data/erebine/agent2/models:/var/lib/inference/.cache/erebine/models
+      # Persistent vLLM compile/JIT cache (VLLM_CACHE_ROOT) -- avoids repaying warmup on restart
+      - /data/erebine/agent2/vllm-cache:/var/lib/inference/.cache/erebine/vllm
+      # Persistent enrollment state
+      - /data/erebine/agent2/config:/var/lib/inference/.config/erebine
+    environment:
+      # Model is assigned from the dashboard during enrollment
+      EREBINE_AGENT_LOG_LEVEL: "${EREBINE_AGENT_LOG_LEVEL:-info}"
+      EREBINE_AGENT_JOIN_KEY: "${EREBINE_AGENT_JOIN_KEY:-}"
+      EREBINE_AGENT_GPU_MEMORY_UTILIZATION: "0.30"
     restart: unless-stopped
