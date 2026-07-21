@@ -31,19 +31,19 @@
 #   - You can remove EREBINE_AGENT_JOIN_KEY after successful enrollment
 #
 # ENVIRONMENT VARIABLES:
-#   EREBINE_AGENT_JOIN_KEY                 [REQUIRED] Join key from Erebine dashboard (first run only)
-#   EREBINE_AGENT_MAX_CONCURRENT           Optional ceiling for concurrent requests (auto-configured when not set)
-#   EREBINE_AGENT_LOG_LEVEL                Logging level: trace, debug, info, warning, error (default: info)
-#   EREBINE_AGENT_MODEL_CACHE_MAX_SIZE_GB  Local model cache size in GB (default: 100)
-#   SHM_SIZE                               Shared memory size (default: 90g)
+#   EREBINE_AGENT_JOIN_KEY              [REQUIRED] Join key from Erebine dashboard (first run only)
+#   EREBINE_AGENT_MAX_CONCURRENT        Optional ceiling for concurrent requests (auto-configured when not set)
+#   EREBINE_AGENT_LOG_LEVEL             Logging level: trace, debug, info, warning, error (default: info)
+#   EREBINE_AGENT_MODEL_CACHE_MAX_SIZE_GB Local model cache size in GB (default: 100)
+#   SHM_SIZE                             Shared memory size (default: 90g)
 #
 # CPU TUNING (auto-computed by the agent; override via EREBINE_AGENT_VLLM_ENV if needed):
-#   VLLM_CPU_OMP_THREADS_BIND              CPU thread binding range (auto: 0-{nproc-1})
-#   VLLM_CPU_NUM_OF_RESERVED_CPU           Reserved CPUs for system (auto: 1)
-#   VLLM_CPU_KVCACHE_SPACE                 KV cache memory in GB (auto: totalRAM - model - overhead)
-#   OMP_NUM_THREADS                        OpenMP threads (auto: physical core count)
-#   OMP_PROC_BIND                          Pin threads to cores (auto: TRUE)
-#   OMP_WAIT_POLICY                        Thread wait strategy (auto: PASSIVE)
+#   VLLM_CPU_OMP_THREADS_BIND            CPU thread binding range (auto: 0-{nproc-1})
+#   VLLM_CPU_NUM_OF_RESERVED_CPU         Reserved CPUs for system (auto: 1)
+#   VLLM_CPU_KVCACHE_SPACE               KV cache memory in GB (auto: totalRAM - model - overhead)
+#   OMP_NUM_THREADS                       OpenMP threads (auto: physical core count)
+#   OMP_PROC_BIND                         Pin threads to cores (auto: TRUE)
+#   OMP_WAIT_POLICY                       Thread wait strategy (auto: PASSIVE)
 #
 # KERNEL SOCKET BUFFER TUNING (optional):
 #   The agent sets ZeroMQ socket buffers to 4 MiB for streaming throughput.

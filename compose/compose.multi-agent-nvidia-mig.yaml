@@ -1,0 +1,147 @@
+# SPDX-License-Identifier: MIT
+# Erebine Agent - NVIDIA MIG Stack (two agents, one physical GPU)
+#
+# Deploys two EIM agents pinned to two MIG instances carved from a single
+# NVIDIA A30. Each agent gets a hard-partitioned 2g.12gb slice (11.75 GiB,
+# 28 SMs), so neither can starve the other and neither sees the other's
+# memory.
+#
+# MIG IS ONLY SUPPORTED ON A30, A100, H100, H200, AND BLACKWELL DATACENTER
+# PARTS. It is unavailable on A10, L4, L40S, and all GeForce cards. Verify
+# before using this file:
+#   nvidia-smi --query-gpu=name,mig.mode.current --format=csv
+#
+# HOST SETUP (must run BEFORE this stack; compose cannot create MIG instances):
+#   1. Enable MIG mode (requires root and an idle GPU; may require a reset):
+#      sudo nvidia-smi -mig 1 -i 0
+#
+#   2. Confirm the 2g.12gb profile is offered and shows 2/2 free:
+#      nvidia-smi mig -lgip
+#
+#   3. Create two GPU instances plus their compute instances. Profile ID 5 is
+#      2g.12gb on the A30; re-read -lgip if your board reports a different ID:
+#      sudo nvidia-smi mig -cgi 5,5 -C
+#
+#   4. Collect the two MIG UUIDs and paste them into device_ids below:
+#      nvidia-smi -L
+#
+#   5. REGENERATE THE CDI SPEC. Podman resolves devices through CDI, and the
+#      nvidia-cdi-refresh service explicitly does NOT handle MIG
+#      reconfiguration -- a spec generated before step 3 knows nothing about
+#      the new instances, and podman fails with:
+#        Error: setting up CDI devices: unresolvable CDI devices
+#        nvidia.com/gpu=MIG-<uuid>
+#      Regenerate and then confirm the names:
+#        sudo nvidia-ctk cdi generate --output=/var/run/cdi/nvidia.yaml
+#        nvidia-ctk cdi list
+#      USE THE NAMES cdi list PRINTS in device_ids below. Depending on the
+#      generator's device-name strategy they may be UUID-form
+#      (nvidia.com/gpu=MIG-<uuid>) or index-form (nvidia.com/gpu=0:0). Pass
+#      --device-name-strategy=uuid if you want the UUID form; check
+#      `nvidia-ctk cdi generate --help` for the strategies your version
+#      supports.
+#
+#   MIG INSTANCES DO NOT SURVIVE A REBOOT. MIG *mode* persists, but the
+#   instance layout does not. Wrap steps 3 AND 5 in a systemd oneshot ordered
+#   before the container stack, or use nvidia-mig-manager. Recreating the
+#   instances without regenerating the CDI spec reproduces the unresolvable-
+#   device error on every boot.
+#
+# WHAT MIG BUYS YOU:
+#   Two 2g.12gb slices at 0.90 utilization give each agent about 10.6 GiB --
+#   the same total as running both unpartitioned at 0.45 on the shared board.
+#   The gain is isolation and deterministic startup: no free-memory race
+#   between agents at launch. The cost is 28 SMs each with no ability to
+#   borrow idle compute, so a bursty single-agent workload gets roughly half
+#   the throughput it would have on the whole card. If you do not need the
+#   isolation, docker-compose.multi-agent-nvidia.yaml (shared board, split
+#   utilization) is the simpler deployment.
+#
+# WHY MAX_MODEL_LEN IS PINNED BELOW:
+#   Agent GPU detection shells out to nvidia-smi --query-gpu=memory.total,
+#   which reports the PHYSICAL board (24576 MiB) and not the MIG slice the
+#   container actually receives. AutoConfigurator would therefore size context
+#   length against roughly double the memory that exists. Pin the context
+#   length explicitly until detection is MIG-aware.
+#
+# WHY THIS FILE IS NOT PRIVILEGED:
+#   A privileged container can see all /dev/nvidia* nodes, which can defeat
+#   MIG device pinning. After first start, confirm isolation held:
+#     podman exec eim-vllm-mig-0 nvidia-smi -L
+#   It must list exactly ONE MIG device. Because privileged is off, the agent
+#   cannot raise socket buffers itself -- set them on the host:
+#     sudo sysctl -w net.core.wmem_max=4194304
+#     sudo sysctl -w net.core.rmem_max=4194304
+#   Persist in /etc/sysctl.d/99-erebine.conf.
+#
+# QUICK START:
+#   sudo mkdir -p /data/erebine/agent{0,1}/{models,config,vllm-cache}
+#   sudo chown -R 5152:5152 /data/erebine
+#   export EREBINE_AGENT_JOIN_KEY=ejk_your_key_here
+#   sudo -E podman compose -f docker-compose.multi-agent-nvidia-mig.yaml up -d
+#
+# ENVIRONMENT VARIABLES:
+#   EREBINE_AGENT_JOIN_KEY                 [REQUIRED] Join key (first run only)
+#   EREBINE_MIG_UUID_0                     [REQUIRED] MIG UUID for agent0
+#   EREBINE_MIG_UUID_1                     [REQUIRED] MIG UUID for agent1
+#   EREBINE_AGENT_GPU_MEMORY_UTILIZATION   Fraction of the MIG SLICE (default below: 0.90)
+#   EREBINE_AGENT_MAX_MODEL_LEN            Context length; pin it, see note above
+#   EREBINE_AGENT_LOG_LEVEL                trace, debug, info, warning, error (default: info)
+#   SHM_SIZE                               Shared memory size (default: 16g)
+
+services:
+  agent0:
+    image: ${DOCKER_REGISTRY:-ghcr.io/erebine/container-agents}/eim-vllm-cuda:${VERSION:-latest}
+    container_name: eim-vllm-mig-0
+    shm_size: ${SHM_SIZE:-16g}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              # One MIG instance, not a whole GPU. Omitting device_ids would
+              # expose every device on the host to this container.
+              device_ids: ["${EREBINE_MIG_UUID_0:?set EREBINE_MIG_UUID_0 from nvidia-smi -L}"]
+              capabilities: [gpu]
+    volumes:
+      # Persistent model cache
+      - /data/erebine/agent0/models:/var/lib/inference/.cache/erebine/models
+      # Persistent vLLM compile/JIT cache (VLLM_CACHE_ROOT) -- avoids repaying warmup on restart
+      - /data/erebine/agent0/vllm-cache:/var/lib/inference/.cache/erebine/vllm
+      # Persistent enrollment state
+      - /data/erebine/agent0/config:/var/lib/inference/.config/erebine
+    environment:
+      # Model is assigned from the dashboard during enrollment
+      EREBINE_AGENT_LOG_LEVEL: "${EREBINE_AGENT_LOG_LEVEL:-info}"
+      EREBINE_AGENT_JOIN_KEY: "${EREBINE_AGENT_JOIN_KEY:-}"
+      # Fraction of the 11.75 GiB MIG slice, not of the 24 GiB board. The
+      # slice is exclusively ours, so this can run high.
+      EREBINE_AGENT_GPU_MEMORY_UTILIZATION: "${EREBINE_AGENT_GPU_MEMORY_UTILIZATION:-0.90}"
+      EREBINE_AGENT_MAX_MODEL_LEN: "${EREBINE_AGENT_MAX_MODEL_LEN:-1024}"
+    restart: unless-stopped
+
+  agent1:
+    image: ${DOCKER_REGISTRY:-ghcr.io/erebine/container-agents}/eim-vllm-cuda:${VERSION:-latest}
+    container_name: eim-vllm-mig-1
+    shm_size: ${SHM_SIZE:-16g}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${EREBINE_MIG_UUID_1:?set EREBINE_MIG_UUID_1 from nvidia-smi -L}"]
+              capabilities: [gpu]
+    volumes:
+      # Persistent model cache
+      - /data/erebine/agent1/models:/var/lib/inference/.cache/erebine/models
+      # Persistent vLLM compile/JIT cache (VLLM_CACHE_ROOT) -- avoids repaying warmup on restart
+      - /data/erebine/agent1/vllm-cache:/var/lib/inference/.cache/erebine/vllm
+      # Persistent enrollment state
+      - /data/erebine/agent1/config:/var/lib/inference/.config/erebine
+    environment:
+      # Model is assigned from the dashboard during enrollment
+      EREBINE_AGENT_LOG_LEVEL: "${EREBINE_AGENT_LOG_LEVEL:-info}"
+      EREBINE_AGENT_JOIN_KEY: "${EREBINE_AGENT_JOIN_KEY:-}"
+      EREBINE_AGENT_GPU_MEMORY_UTILIZATION: "${EREBINE_AGENT_GPU_MEMORY_UTILIZATION:-0.90}"
+      EREBINE_AGENT_MAX_MODEL_LEN: "${EREBINE_AGENT_MAX_MODEL_LEN:-1024}"
+    restart: unless-stopped

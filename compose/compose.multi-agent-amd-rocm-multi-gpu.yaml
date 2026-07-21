@@ -1,0 +1,126 @@
+# Erebine EIM Agent -- AMD ROCm, one agent per GPU
+#
+# WHEN TO USE THIS FILE INSTEAD OF docker-compose.agent-amd-rocm.yaml:
+#
+#   Use this file when the host has more than one AMD GPU and tensor
+#   parallelism across them is unavailable or undesirable. Each GPU gets its
+#   own agent, its own worker registration, and its own vLLM process at
+#   tensor-parallel-size 1. No collective library (RCCL) is involved, so no
+#   GPU-to-GPU interconnect is required.
+#
+#   This is the correct shape whenever the GPUs cannot do peer-to-peer DMA --
+#   most notably when they are passed through to a VM as separate VFIO
+#   devices, where RCCL reports "Could not enable P2P" and cannot launch a
+#   collective at all. It is also the higher-throughput shape for models that
+#   fit in a single GPU's VRAM: two independent workers serve more concurrent
+#   requests than one tensor-parallel pair sharing a PCIe link.
+#
+#   The tradeoff: no model may exceed the VRAM of a single GPU. If you need to
+#   split one model across GPUs, you need tensor parallelism, and this file is
+#   not for you.
+#
+# QUICK START:
+#   1. Get a join key from your Erebine dashboard:
+#      Dashboard -> Infrastructure -> Agents -> Generate Join Key
+#
+#   2. Create host directories with correct permissions:
+#      sudo mkdir -p /data/erebine/agent{0,1}/models /data/erebine/agent{0,1}/config /data/erebine/agent{0,1}/vllm-cache
+#      sudo chown -R 5152:5152 /data/erebine
+#
+#   3. Set environment variables or create a .env file:
+#      export EREBINE_AGENT_JOIN_KEY=ejk_your_key_here
+#
+#   4. Start the agent:
+#      sudo -E podman compose -f compose.agent-nvidia.yaml up -d
+#
+# ENROLLMENT:
+#   Each agent enrolls separately and appears as its own worker in the
+#   dashboard. Both may use the same join key. Enrollment state is persisted
+#   per agent under /data/erebine/config-gpu<N>; do NOT point two agents at
+#   one config directory -- they would fight over a single worker identity.
+#
+# SCALING BEYOND TWO GPUS:
+#   Copy an agent block, increment HIP_VISIBLE_DEVICES, the container name,
+#   the metrics port, and the config/model volume paths.
+#
+# ENVIRONMENT VARIABLES:
+#   EREBINE_AGENT_JOIN_KEY              [REQUIRED] Join key from the Erebine dashboard (first run only)
+#   EREBINE_AGENT_GPU_MEMORY_UTILIZATION GPU memory utilization fraction (default: 0.90)
+#   EREBINE_AGENT_MAX_MODEL_LEN         Maximum sequence length (default: model default)
+#   EREBINE_AGENT_MAX_CONCURRENT        Optional ceiling for concurrent requests (auto-configured when not set)
+#   EREBINE_AGENT_LOG_LEVEL             Logging level: trace, debug, info, warning, error (default: info)
+#
+#   HIP_VISIBLE_DEVICES and EREBINE_AGENT_TENSOR_PARALLEL_SIZE are set
+#   per-agent below and are deliberately NOT operator-overridable here: pinning
+#   one GPU per agent is the entire point of this file.
+#
+# KERNEL SOCKET BUFFER TUNING (optional):
+#   The agent sets ZeroMQ socket buffers to 4 MiB for streaming throughput.
+#   Linux defaults net.core.wmem_max and net.core.rmem_max to 212992 bytes,
+#   which silently caps the requested buffer size. The agent will attempt to
+#   raise these limits on startup (requires privileged mode or CAP_SYS_ADMIN).
+#
+#   If the container is not privileged, set these on the host before starting:
+#     sudo sysctl -w net.core.wmem_max=4194304
+#     sudo sysctl -w net.core.rmem_max=4194304
+#
+#   To persist across reboots, add to /etc/sysctl.d/99-erebine.conf:
+#     net.core.wmem_max = 4194304
+#     net.core.rmem_max = 4194304
+
+x-agent-base: &agent-base
+  image: ${DOCKER_REGISTRY:-ghcr.io/erebine/container-agents}/eim-vllm-rocm:${VERSION:-latest}
+  privileged: true
+  shm_size: ${SHM_SIZE:-90g}
+  devices:
+    - /dev/kfd:/dev/kfd
+    - /dev/dri:/dev/dri
+    - /dev/mem:/dev/mem
+  security_opt:
+    - seccomp=unconfined
+  cap_add:
+    - SYS_PTRACE
+    - CAP_SYS_ADMIN
+  group_add:
+    - video
+    - render
+  restart: unless-stopped
+
+x-agent-env: &agent-env
+  EREBINE_AGENT_JOIN_KEY: "${EREBINE_AGENT_JOIN_KEY:-}"
+  EREBINE_AGENT_MAX_MODEL_LEN: "${EREBINE_AGENT_MAX_MODEL_LEN:-}"
+  EREBINE_AGENT_GPU_MEMORY_UTILIZATION: "${EREBINE_AGENT_GPU_MEMORY_UTILIZATION:-0.90}"
+  EREBINE_AGENT_MAX_CONCURRENT: "${EREBINE_AGENT_MAX_CONCURRENT:-}"
+  EREBINE_AGENT_LOG_LEVEL: "${EREBINE_AGENT_LOG_LEVEL:-info}"
+  EREBINE_AGENT_VLLM_ENV: "VLLM_ROCM_USE_AITER=1"
+  # One GPU per agent: no cross-GPU collective, so no RCCL.
+  EREBINE_AGENT_TENSOR_PARALLEL_SIZE: "1"
+
+services:
+  agent0:
+    <<: *agent-base
+    container_name: eim-vllm-rocm-0-gpu-0
+    volumes:
+      # Persistent model cache
+      - /data/erebine/agent0/models:/var/lib/inference/.cache/erebine/models
+      # Persistent vLLM compile/JIT cache (VLLM_CACHE_ROOT) -- avoids repaying warmup on restart
+      - /data/erebine/agent0/vllm-cache:/var/lib/inference/.cache/erebine/vllm
+      # Persistent enrollment state
+      - /data/erebine/agent0/config:/var/lib/inference/.config/erebine
+    environment:
+      <<: *agent-env
+      HIP_VISIBLE_DEVICES: "0"
+
+  agent1:
+    <<: *agent-base
+    container_name: eim-vllm-rocm-1-gpu-1
+    volumes:
+      # Persistent model cache
+      - /data/erebine/agent1/models:/var/lib/inference/.cache/erebine/models
+      # Persistent vLLM compile/JIT cache (VLLM_CACHE_ROOT) -- avoids repaying warmup on restart
+      - /data/erebine/agent1/vllm-cache:/var/lib/inference/.cache/erebine/vllm
+      # Persistent enrollment state
+      - /data/erebine/agent1/config:/var/lib/inference/.config/erebine
+    environment:
+      <<: *agent-env
+      HIP_VISIBLE_DEVICES: "1"

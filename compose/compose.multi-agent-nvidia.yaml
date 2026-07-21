@@ -34,7 +34,7 @@
 #   EREBINE_AGENT_LOG_LEVEL                        Logging level: trace, debug, info, warning, error (default: info)
 #   EREBINE_AGENT_VLLM_DISABLE_CUSTOM_ALL_REDUCE   Force disable custom reduce (default: "true")
 #   EREBINE_AGENT_MAX_MODEL_LEN                    Maximum sequence length (default: model default)
-#   SHM_SIZE                                       Shared memory size in bytes (default: 8589934592 = 8GB)
+#   SHM_SIZE                                        Shared memory size in bytes (default: 8589934592 = 8GB)
 #
 # KERNEL SOCKET BUFFER TUNING (optional):
 #   The agent sets ZeroMQ socket buffers to 4 MiB for streaming throughput.

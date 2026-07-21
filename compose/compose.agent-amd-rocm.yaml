@@ -31,15 +31,24 @@
 #   - You can remove EREBINE_AGENT_JOIN_KEY after successful enrollment
 #
 # ENVIRONMENT VARIABLES:
-#   EREBINE_AGENT_JOIN_KEY                 [REQUIRED] Join key from Erebine dashboard (first run only)
-#   HIP_VISIBLE_DEVICES                    GPU device indices to use (default: 0)
-#   EREBINE_AGENT_MAX_CONCURRENT           Optional ceiling for concurrent requests (auto-configured when not set)
-#   EREBINE_AGENT_TENSOR_PARALLEL_SIZE     Tensor parallel size for multi-GPU (default: 1)
-#   EREBINE_AGENT_GPU_MEMORY_UTILIZATION   GPU memory utilization fraction (default: 0.90)
-#   EREBINE_AGENT_MAX_MODEL_LEN            Maximum sequence length (default: model default)
-#   EREBINE_AGENT_MODEL_CACHE_MAX_SIZE_GB  Local model cache size in GB (default: 100)
-#   EREBINE_AGENT_LOG_LEVEL                Logging level: trace, debug, info, warning, error (default: info)
-#   SHM_SIZE                               Shared memory size in bytes (default: 8589934592 = 8GB)
+#   EREBINE_AGENT_JOIN_KEY              [REQUIRED] Join key from Erebine dashboard (first run only)
+#   HIP_VISIBLE_DEVICES                  GPU device indices to expose to the HIP runtime
+#                                        (default: unset, meaning every GPU the container is
+#                                        given). Set it only to restrict the agent to a subset,
+#                                        and list every device it may use (e.g. "0,1"). A value
+#                                        naming fewer GPUs than the container holds caps the
+#                                        agent at that subset: tensor parallelism can never
+#                                        exceed the devices HIP exposes.
+#   EREBINE_AGENT_MAX_CONCURRENT        Optional ceiling for concurrent requests (auto-configured when not set)
+#   EREBINE_AGENT_TENSOR_PARALLEL_SIZE  Tensor parallel size for multi-GPU (default: unset,
+#                                        derived from the GPUs the HIP runtime exposes). Set it
+#                                        only to override auto-configuration; a value wider than
+#                                        the visible GPU count fails the vLLM worker at startup.
+#   EREBINE_AGENT_GPU_MEMORY_UTILIZATION GPU memory utilization fraction (default: 0.90)
+#   EREBINE_AGENT_MAX_MODEL_LEN         Maximum sequence length (default: model default)
+#   EREBINE_AGENT_MODEL_CACHE_MAX_SIZE_GB Local model cache size in GB (default: 100)
+#   EREBINE_AGENT_LOG_LEVEL             Logging level: trace, debug, info, warning, error (default: info)
+#   SHM_SIZE                             Shared memory size in bytes (default: 8589934592 = 8GB)
 #
 # KERNEL SOCKET BUFFER TUNING (optional):
 #   The agent sets ZeroMQ socket buffers to 4 MiB for streaming throughput.
@@ -85,11 +94,19 @@ services:
     environment:
       # Agent Enrollment [REQUIRED for first run]
       EREBINE_AGENT_JOIN_KEY: "${EREBINE_AGENT_JOIN_KEY:-}"
-      # ROCm GPU Configuration
-      HIP_VISIBLE_DEVICES: "${HIP_VISIBLE_DEVICES:-0}"
+      # ROCm GPU Configuration. Passed through from the host environment only
+      # when set; left unset the HIP runtime exposes every GPU the container is
+      # given. Do not default this to a single index: amd-smi enumerates GPUs
+      # from the driver and ignores the mask, so the agent would auto-configure
+      # a tensor-parallel size wider than the devices vLLM can actually see.
+      HIP_VISIBLE_DEVICES:
       # Model is assigned from the dashboard during enrollment
       EREBINE_AGENT_MAX_MODEL_LEN: "${EREBINE_AGENT_MAX_MODEL_LEN:-}"
-      EREBINE_AGENT_TENSOR_PARALLEL_SIZE: "${EREBINE_AGENT_TENSOR_PARALLEL_SIZE:-1}"
+      # Left unset so auto-configuration derives tensor parallelism from the GPUs
+      # the HIP runtime exposes. Defaulting it to a value pins it: AgentRuntime
+      # treats any parseable value as an operator override and skips the derived
+      # size. Passed through from the host environment when set, as an override.
+      EREBINE_AGENT_TENSOR_PARALLEL_SIZE:
       EREBINE_AGENT_GPU_MEMORY_UTILIZATION: "${EREBINE_AGENT_GPU_MEMORY_UTILIZATION:-0.90}"
       EREBINE_AGENT_MAX_CONCURRENT: "${EREBINE_AGENT_MAX_CONCURRENT:-}"
       EREBINE_AGENT_LOG_LEVEL: "${EREBINE_AGENT_LOG_LEVEL:-info}"
