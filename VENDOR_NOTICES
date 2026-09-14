@@ -1,0 +1,103 @@
+VENDOR NOTICES
+
+The GPU agent images are built on vendor base images and contain vendor
+software. That software is not covered by the MIT License on the Erebine
+layer. It is licensed by its vendor, on the vendor's terms, and those
+terms restrict use and not only redistribution. Pulling or running one
+of these images is subject to them.
+
+  eim-vllm-cuda        NVIDIA. Built on nvcr.io/nvidia/cuda-dl-base.
+                       Contains the CUDA toolkit and runtime, cuDNN,
+                       NCCL, NVSHMEM and the TensorRT runtime libraries.
+  eim-vllm-omni-cuda   NVIDIA. Built on eim-vllm-cuda, so everything
+                       said here about that image applies to it.
+  eim-vllm-rocm        AMD. Built on rocm/dev-ubuntu-24.04. Contains
+                       the ROCm stack.
+
+The eim-vllm-cpu, eim-vllm-zendnn and eem images are built on
+debian:trixie-slim, not on a vendor base image. No vendor license
+agreement applies to them; their components carry their own licenses.
+
+
+THE TERMS
+
+  NVIDIA Software License Agreement
+  https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/
+
+  Product-Specific Terms for NVIDIA AI Products
+  https://www.nvidia.com/en-us/agreements/enterprise-software/product-specific-terms-for-ai-products/
+
+  AMD ROCm licensing, per component
+  https://rocm.docs.amd.com/en/latest/about/license.html
+
+These documents govern. Read them. This notice points at them and
+summarizes the restrictions a reader is least likely to expect; it does
+not replace them, and NVIDIA and AMD may change them.
+
+
+WHAT THE NVIDIA TERMS RESTRICT
+
+  - Emotion recognition is prohibited outright, for the software and
+    every component of it. These images run vision, video, audio and
+    realtime voice workloads. None of it may be pointed at this.
+  - You may not use the software to develop competing products or
+    technologies, or to help a third party do so, and you may not use
+    it to identify or support an intellectual property claim against
+    NVIDIA.
+  - You may not replace an NVIDIA component with other software that
+    implements NVIDIA's interfaces. The CUDA toolkit, the SDKs and the
+    drivers are licensed to run only on NVIDIA platforms, so a
+    translation layer over other hardware is out on both counts.
+  - You may not reverse engineer, decompile or disassemble the NVIDIA
+    binaries, nor any part of the output an NVIDIA SDK generates.
+
+Benchmarks are allowed. NVIDIA's container benchmarking exemption names
+the cuda-dl-base image these are built on, so benchmarking, regression
+and performance results for the CUDA images may be published without
+asking NVIDIA first. The exemption does not extend to competitive
+analysis: a comparison against a non-NVIDIA platform still needs
+NVIDIA's written permission.
+
+Erebine is not sponsored by, endorsed by, or affiliated with NVIDIA
+Corporation.
+
+
+WHAT THE AMD TERMS RESTRICT
+
+AMD licenses ROCm per component, under MIT, Apache-2.0, NCSA and BSD
+licenses. What those ask of you is notice rather than restraint: keep
+the copyright and license text with any copy you pass on. Two ROCm
+packages, ROCprof Trace Decoder and the AOCC CPU optimizations, ship in
+binary form under a separate AMD license agreement instead; using,
+copying or distributing either one accepts that agreement.
+
+Erebine is not sponsored by, endorsed by, or affiliated with Advanced
+Micro Devices, Inc.
+
+
+WHERE THE LICENSE TEXT IS INSIDE THE IMAGE
+
+Every image carries the text. After pulling:
+
+  Erebine agent binaries (MIT)  /usr/share/licenses/erebine/LICENSE
+  Swift packages in them        /usr/share/licenses/erebine/THIRD_PARTY_NOTICES
+  NVIDIA, on the CUDA images    /workspace/license.txt and
+                                /opt/nvidia/entrypoint.d/
+  AMD, on the ROCm image        /opt/rocm/share/doc/<component>/
+  Base distribution packages    /usr/share/doc/<package>/copyright
+  Python packages               <dist>.dist-info/ in the image's venv
+
+Read a file inside an image without starting an agent:
+
+``` shell
+podman run --rm --entrypoint /bin/cat \
+  ghcr.io/erebine/container-agents/eim-vllm-cuda:latest \
+  /workspace/license.txt
+```
+
+What Erebine changes in the inference stack is recorded in PATCHES.md.
+The MIT text for the Erebine layer of this repository is in LICENSE.
+
+Vendor documents checked 2026-09-14: NVIDIA Software License Agreement,
+Last Modified May 07, 2026; Product-Specific Terms for NVIDIA AI
+Products, Last Modified April 15, 2026.

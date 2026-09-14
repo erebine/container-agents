@@ -13,5 +13,9 @@ component under its own license.
     `erebine-eem-agent --license`.
   - The base images, distribution packages and Python packages in each
     image carry their own license files inside the image.
+  - The GPU images are built on NVIDIA and AMD base images and contain
+    vendor software under vendor terms, which restrict use and not only
+    redistribution. VENDOR_NOTICES names those terms, links them, and
+    says where each license text sits inside the image.
 
 What Erebine changes in the inference stack is recorded in PATCHES.md.
