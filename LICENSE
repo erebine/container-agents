@@ -23,7 +23,7 @@ SOFTWARE.
 Trademarks are not licensed under this license. See https://erebine.ai/trademark.
 Third-party components: see THIRD_PARTY_NOTICES.
 
-Erebine is open agent, open protocol, proprietary control plane.
+Erebine is MIT-licensed agents, an open API, a proprietary control plane.
 The erectl client and the EIM and EEM agents are distributed as MIT-licensed
 binaries. The Erebine platform (router, control plane, frontend) is proprietary.
 Documentation and design papers are published under CC BY 4.0.
