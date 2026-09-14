@@ -1,0 +1,17 @@
+THIRD-PARTY NOTICES
+
+The Erebine agent images that the compose files in this repository run
+(ghcr.io/erebine/container-agents) contain third-party software, each
+component under its own license.
+
+  - The erebine-eim-agent and erebine-eem-agent binaries in every image
+    statically link third-party Swift packages. Their notices are
+    installed in the image at /usr/share/licenses/erebine/THIRD_PARTY_NOTICES,
+    attached to each release of the binaries as the asset
+    THIRD_PARTY_NOTICES (https://github.com/Erebine/binaries/releases),
+    and printed by `erebine-eim-agent --license` and
+    `erebine-eem-agent --license`.
+  - The base images, distribution packages and Python packages in each
+    image carry their own license files inside the image.
+
+What Erebine changes in the inference stack is recorded in PATCHES.md.
