@@ -14,6 +14,19 @@ Using the provided compose files, you can quickly set up and run your AI workloa
 configuration. The compose files are designed to be easy to use and customizable, allowing you
 to tailor the environment to your specific needs.
 
+## Vendor terms
+
+The GPU images contain vendor software under vendor terms. The CUDA images
+(`eim-vllm-cuda`, `eim-vllm-omni-cuda`) carry NVIDIA software; the ROCm image
+(`eim-vllm-rocm`) carries AMD's. Pulling or running those images is subject to
+the vendor's terms, and those terms restrict use, not only redistribution --
+emotion recognition, for one, is prohibited outright on the NVIDIA images. The
+CPU, ZenDNN and EEM images are built on plain Debian and carry no vendor terms.
+
+[VENDOR_NOTICES](VENDOR_NOTICES) names the terms, links them, lists the
+restrictions you are least likely to expect, and says where each license text
+sits inside the image.
+
 ## Getting Started
 
 To get started with Erebine.ai, simply clone the repository and follow the instructions in the

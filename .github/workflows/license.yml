@@ -1,0 +1,45 @@
+---
+# License compliance for this repository (work order WI-11).
+#
+# Runs on every pull request and every push to main, and fails the build when
+# a compose file runs an image VENDOR_NOTICES does not name or that is not
+# published under ghcr.io/erebine/container-agents, when LICENSE stops being
+# the canonical Erebine text, when VENDOR_NOTICES loses one of the vendor
+# terms it summarizes, when the README stops pointing at it, or when a
+# non-ASCII byte appears in any of them.
+#
+# No image is built or pulled here: the Dockerfiles and the images' own
+# license labels live in Erebine/platform. What this repository can get wrong
+# is the agreement between the compose files and the notices, and that is
+# entirely local -- the check resolves no registry, release or tag. The
+# script's own self-test runs first, so a check that has stopped checking
+# anything is reported before it is trusted.
+name: License
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  license:
+    name: License checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: License check self-tests
+        run: bash scripts/check-license.sh --self-test
+
+      - name: Every image the compose files run has its terms stated
+        run: bash scripts/check-license.sh
