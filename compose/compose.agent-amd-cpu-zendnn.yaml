@@ -78,6 +78,12 @@ services:
     shm_size: ${SHM_SIZE:-90g}
     # Podman defaults a container to 2048 pids and counts threads; vLLM needs more.
     pids_limit: -1
+    # No locked-memory limit, as erectl sets on every agent: NCCL over
+    # InfiniBand or RoCE registers memory against it.
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
     # No command - entrypoint handles enrollment + run automatically
     volumes:
       # Persistent model cache
