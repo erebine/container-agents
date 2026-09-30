@@ -16,7 +16,7 @@
 #      export EREBINE_AGENT_JOIN_KEY=ejk_your_key_here
 #
 #   4. Start the agent:
-#      sudo -E podman compose -f docker-compose.agent-amd-rocm.yaml up -d
+#      sudo -E podman compose -f compose/compose.agent-amd-rocm.yaml up -d
 #
 # PREREQUISITES:
 #   - AMD GPU with ROCm support (MI210, MI250, MI300, RX 7900, etc.)

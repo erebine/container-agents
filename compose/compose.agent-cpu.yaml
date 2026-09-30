@@ -10,7 +10,7 @@
 #   Default: ghcr.io/erebine/container-agents/eim-vllm-cpu:latest
 #   Override with DOCKER_REGISTRY=... and VERSION=...
 #   For AMD ZenTorch optimized CPU inference use
-#   docker-compose.agent-amd-cpu-zendnn.yaml instead.
+#   compose.agent-amd-cpu-zendnn.yaml instead.
 #
 # QUICK START:
 #   1. Get a join key from your Erebine dashboard:
@@ -24,7 +24,7 @@
 #      sudo chown -R 5152:5152 /data/erebine
 #
 #   4. Start the agent:
-#      docker compose -f docker-compose.agent-cpu.yaml up -d
+#      docker compose -f compose/compose.agent-cpu.yaml up -d
 #
 # ENROLLMENT WORKFLOW:
 #   - On first start, the agent enrolls using your join key

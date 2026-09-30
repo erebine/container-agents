@@ -1,6 +1,6 @@
 # Erebine EIM Agent -- AMD ROCm, one agent per GPU
 #
-# WHEN TO USE THIS FILE INSTEAD OF docker-compose.agent-amd-rocm.yaml:
+# WHEN TO USE THIS FILE INSTEAD OF compose.agent-amd-rocm.yaml:
 #
 #   Use this file when the host has more than one AMD GPU and tensor
 #   parallelism across them is unavailable or undesirable. Each GPU gets its

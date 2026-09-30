@@ -22,7 +22,7 @@
 #      sudo chown -R 5152:5152 /data/erebine
 #
 #   4. Start the agent:
-#      docker compose -f docker-compose.agent-amd-cpu-zendnn.yaml up -d
+#      docker compose -f compose/compose.agent-amd-cpu-zendnn.yaml up -d
 #
 # ENROLLMENT WORKFLOW:
 #   - On first start, the agent enrolls using your join key

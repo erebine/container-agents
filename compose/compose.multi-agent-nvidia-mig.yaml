@@ -55,7 +55,7 @@
 #   between agents at launch. The cost is 28 SMs each with no ability to
 #   borrow idle compute, so a bursty single-agent workload gets roughly half
 #   the throughput it would have on the whole card. If you do not need the
-#   isolation, docker-compose.multi-agent-nvidia.yaml (shared board, split
+#   isolation, compose.multi-agent-nvidia.yaml (shared board, split
 #   utilization) is the simpler deployment.
 #
 # WHY MAX_MODEL_LEN IS PINNED BELOW:
@@ -79,7 +79,7 @@
 #   sudo mkdir -p /data/erebine/agent{0,1}/{models,config,vllm-cache}
 #   sudo chown -R 5152:5152 /data/erebine
 #   export EREBINE_AGENT_JOIN_KEY=ejk_your_key_here
-#   sudo -E podman compose -f docker-compose.multi-agent-nvidia-mig.yaml up -d
+#   sudo -E podman compose -f compose/compose.multi-agent-nvidia-mig.yaml up -d
 #
 # ENVIRONMENT VARIABLES:
 #   EREBINE_AGENT_JOIN_KEY                 [REQUIRED] Join key (first run only)
