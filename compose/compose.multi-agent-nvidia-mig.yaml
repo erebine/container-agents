@@ -41,8 +41,9 @@
 #      `nvidia-ctk cdi generate --help` for the strategies your version
 #      supports.
 #
-#   MIG INSTANCES DO NOT SURVIVE A REBOOT. MIG *mode* persists, but the
-#   instance layout does not. Wrap steps 3 AND 5 in a systemd oneshot ordered
+#   MIG INSTANCES DO NOT SURVIVE A REBOOT. On Ampere (A30/A100) MIG
+#   *mode* persists but the instance layout does not; on Hopper and
+#   newer, MIG mode itself is also lost on reboot or driver reload. Wrap steps 3 AND 5 in a systemd oneshot ordered
 #   before the container stack, or use nvidia-mig-manager. Recreating the
 #   instances without regenerating the CDI spec reproduces the unresolvable-
 #   device error on every boot.
@@ -54,7 +55,7 @@
 #   between agents at launch. The cost is 28 SMs each with no ability to
 #   borrow idle compute, so a bursty single-agent workload gets roughly half
 #   the throughput it would have on the whole card. If you do not need the
-#   isolation, docker-compose.multi-agent-nvidia.yaml (shared board, split
+#   isolation, compose.multi-agent-nvidia.yaml (shared board, split
 #   utilization) is the simpler deployment.
 #
 # WHY MAX_MODEL_LEN IS PINNED BELOW:
@@ -78,7 +79,7 @@
 #   sudo mkdir -p /data/erebine/agent{0,1}/{models,config,vllm-cache}
 #   sudo chown -R 5152:5152 /data/erebine
 #   export EREBINE_AGENT_JOIN_KEY=ejk_your_key_here
-#   sudo -E podman compose -f docker-compose.multi-agent-nvidia-mig.yaml up -d
+#   sudo -E podman compose -f compose/compose.multi-agent-nvidia-mig.yaml up -d
 #
 # ENVIRONMENT VARIABLES:
 #   EREBINE_AGENT_JOIN_KEY                 [REQUIRED] Join key (first run only)
@@ -88,6 +89,36 @@
 #   EREBINE_AGENT_MAX_MODEL_LEN            Context length; pin it, see note above
 #   EREBINE_AGENT_LOG_LEVEL                trace, debug, info, warning, error (default: info)
 #   SHM_SIZE                               Shared memory size (default: 16g)
+#   EREBINE_AGENT_CUDA_TOOLKIT_DIR         Host CUDA toolkit root (see CUDA COMPILER SUPPLY below)
+#   EREBINE_AGENT_CUDA_FETCH_COMPILER      Fetch the CUDA compiler from NVIDIA on start (default: 0)
+#
+# CUDA COMPILER SUPPLY (NVIDIA images only):
+#   This image ships no ptxas and no nvcc. NVIDIA's CUDA Toolkit EULA does not
+#   identify either as redistributable, so Erebine cannot publish them. Both
+#   are needed to compile GPU kernels at run time, and this image carries NO
+#   sm80, sm86 or sm89 cubins -- so AMPERE AND ADA GPUS WILL NOT SERVE without
+#   a compiler. Blackwell and Hopper have precompiled kernels and do serve.
+#
+#   Supply one by either route; the choice is yours:
+#
+#     1. MOUNTED. A CUDA toolkit already on the host, bind-mounted read-only.
+#        Nothing is downloaded. Found automatically at /usr/local/cuda,
+#        /usr/local/cuda-*, or /opt/cuda; name another location with
+#        EREBINE_AGENT_CUDA_TOOLKIT_DIR. Add to this service:
+#            volumes:
+#              - /usr/local/cuda:/usr/local/cuda:ro
+#
+#     2. FETCHED. Downloaded from NVIDIA on first start, verified against
+#        NVIDIA's published sha256 and cached for later starts. Off by
+#        default: a container that reaches the internet on boot should be
+#        asked to, not assume it. Add to this service:
+#            environment:
+#              EREBINE_AGENT_CUDA_FETCH_COMPILER: "1"
+#
+#   With neither, the agent still starts and still serves -- it warns once and
+#   names both routes. `erectl deploy agent eim` performs route 1 for you
+#   when the host has a toolkit, which is why an erectl-managed host needs
+#   nothing here.
 
 services:
   agent0:
@@ -96,6 +127,12 @@ services:
     shm_size: ${SHM_SIZE:-16g}
     # Podman defaults a container to 2048 pids and counts threads; vLLM needs more.
     pids_limit: -1
+    # No locked-memory limit, as erectl sets on every agent: NCCL over
+    # InfiniBand or RoCE registers memory against it.
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
     deploy:
       resources:
         reservations:
@@ -128,6 +165,12 @@ services:
     shm_size: ${SHM_SIZE:-16g}
     # Podman defaults a container to 2048 pids and counts threads; vLLM needs more.
     pids_limit: -1
+    # No locked-memory limit, as erectl sets on every agent: NCCL over
+    # InfiniBand or RoCE registers memory against it.
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
     deploy:
       resources:
         reservations:

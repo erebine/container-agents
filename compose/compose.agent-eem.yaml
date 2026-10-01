@@ -20,7 +20,7 @@
 #      sudo chown -R 5153:5153 /data/erebine-eem
 #
 #   4. Start the agent:
-#      docker compose -f docker-compose.agent-eem.yaml up -d
+#      docker compose -f compose/compose.agent-eem.yaml up -d
 #
 # ENVIRONMENT VARIABLES:
 #   EREBINE_AGENT_JOIN_KEY    [REQUIRED] Join key from Erebine dashboard

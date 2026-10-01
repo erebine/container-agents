@@ -10,7 +10,7 @@
 #   Default: ghcr.io/erebine/container-agents/eim-vllm-cpu:latest
 #   Override with DOCKER_REGISTRY=... and VERSION=...
 #   For AMD ZenTorch optimized CPU inference use
-#   docker-compose.agent-amd-cpu-zendnn.yaml instead.
+#   compose.agent-amd-cpu-zendnn.yaml instead.
 #
 # QUICK START:
 #   1. Get a join key from your Erebine dashboard:
@@ -24,7 +24,7 @@
 #      sudo chown -R 5152:5152 /data/erebine
 #
 #   4. Start the agent:
-#      docker compose -f docker-compose.agent-cpu.yaml up -d
+#      docker compose -f compose/compose.agent-cpu.yaml up -d
 #
 # ENROLLMENT WORKFLOW:
 #   - On first start, the agent enrolls using your join key
@@ -35,6 +35,7 @@
 # ENVIRONMENT VARIABLES:
 #   EREBINE_AGENT_JOIN_KEY              [REQUIRED] Join key from Erebine dashboard (first run only)
 #   EREBINE_AGENT_MAX_CONCURRENT        Optional ceiling for concurrent requests (auto-configured when not set)
+#   EREBINE_AGENT_OVERPROVISION_FACTOR  Safe-to-admit slot factor, at least 1.0 (default: 1.5)
 #   EREBINE_AGENT_LOG_LEVEL             Logging level: trace, debug, info, warning, error (default: info)
 #   EREBINE_AGENT_MODEL_CACHE_MAX_SIZE_GB Local model cache size in GB (default: 100)
 #   SHM_SIZE                             Shared memory size (default: 90g)
@@ -51,7 +52,10 @@
 #   The agent sets ZeroMQ socket buffers to 4 MiB for streaming throughput.
 #   Linux defaults net.core.wmem_max and net.core.rmem_max to 212992 bytes,
 #   which silently caps the requested buffer size. The agent will attempt to
-#   raise these limits on startup (requires privileged mode or CAP_SYS_ADMIN).
+#   raise these limits on startup, which works only for a privileged
+#   container on the HOST network (/proc/sys is read-only in every
+#   unprivileged container, and the knobs do not exist in a bridge
+#   network namespace at all -- CAP_SYS_ADMIN alone does not help).
 #
 #   If the container is not privileged, set these on the host before starting:
 #     sudo sysctl -w net.core.wmem_max=4194304
@@ -76,6 +80,12 @@ services:
     shm_size: ${SHM_SIZE:-90g}
     # Podman defaults a container to 2048 pids and counts threads; vLLM needs more.
     pids_limit: -1
+    # No locked-memory limit, as erectl sets on every agent: NCCL over
+    # InfiniBand or RoCE registers memory against it.
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
     # No command - entrypoint handles enrollment + run automatically
     volumes:
       # Persistent model cache
