@@ -58,6 +58,8 @@ services:
     ipc: host
     privileged: true
     shm_size: ${SHM_SIZE:-90g}
+    # Podman defaults a container to 2048 pids and counts threads; vLLM needs more.
+    pids_limit: -1
     # For Docker Compose v2.3+ with NVIDIA Container Toolkit, use the following deploy section to request GPUs
     deploy:
       resources:

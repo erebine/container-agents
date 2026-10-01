@@ -72,6 +72,8 @@ services:
     ipc: host
     privileged: true
     shm_size: ${SHM_SIZE:-90g}
+    # Podman defaults a container to 2048 pids and counts threads; vLLM needs more.
+    pids_limit: -1
     devices:
       - /dev/kfd:/dev/kfd
       - /dev/dri:/dev/dri

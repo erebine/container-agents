@@ -94,6 +94,8 @@ services:
     image: ${DOCKER_REGISTRY:-ghcr.io/erebine/container-agents}/eim-vllm-cuda:${VERSION:-latest}
     container_name: eim-vllm-mig-0
     shm_size: ${SHM_SIZE:-16g}
+    # Podman defaults a container to 2048 pids and counts threads; vLLM needs more.
+    pids_limit: -1
     deploy:
       resources:
         reservations:
@@ -124,6 +126,8 @@ services:
     image: ${DOCKER_REGISTRY:-ghcr.io/erebine/container-agents}/eim-vllm-cuda:${VERSION:-latest}
     container_name: eim-vllm-mig-1
     shm_size: ${SHM_SIZE:-16g}
+    # Podman defaults a container to 2048 pids and counts threads; vLLM needs more.
+    pids_limit: -1
     deploy:
       resources:
         reservations:

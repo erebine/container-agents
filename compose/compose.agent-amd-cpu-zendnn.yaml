@@ -72,6 +72,8 @@ services:
       - SYS_PTRACE
       - CAP_SYS_ADMIN
     shm_size: ${SHM_SIZE:-90g}
+    # Podman defaults a container to 2048 pids and counts threads; vLLM needs more.
+    pids_limit: -1
     # No command - entrypoint handles enrollment + run automatically
     volumes:
       # Persistent model cache
