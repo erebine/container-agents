@@ -27,20 +27,54 @@
 # ENVIRONMENT VARIABLES:
 #   EREBINE_AGENT_JOIN_KEY                         [REQUIRED] Join key from Erebine dashboard (first run only)
 #   EREBINE_AGENT_MAX_CONCURRENT                   Optional ceiling for concurrent requests (auto-configured when not set)
+#   EREBINE_AGENT_OVERPROVISION_FACTOR             Safe-to-admit slot factor, at least 1.0 (default: 1.5)
 #   EREBINE_AGENT_TENSOR_PARALLEL_SIZE             Tensor parallel size for multi-GPU (default: 1)
 #   EREBINE_AGENT_GPU_MEMORY_UTILIZATION           GPU memory utilization fraction (default: 0.90)
 #   EREBINE_AGENT_MAX_MODEL_LEN                    Maximum sequence length (default: model default)
 #   EREBINE_AGENT_MODEL_CACHE_MAX_SIZE_GB          Local model cache size in GB (default: 100)
 #   EREBINE_AGENT_LOG_LEVEL                        Logging level: trace, debug, info, warning, error (default: info)
-#   EREBINE_AGENT_VLLM_DISABLE_CUSTOM_ALL_REDUCE   Force disable custom reduce (default: "true")
+#   EREBINE_AGENT_VLLM_DISABLE_CUSTOM_ALL_REDUCE   Force disable custom all-reduce (default: "false"; A30/A40/L40 are handled automatically)
 #   EREBINE_AGENT_MAX_MODEL_LEN                    Maximum sequence length (default: model default)
-#   SHM_SIZE                                        Shared memory size in bytes (default: 8589934592 = 8GB)
+#   SHM_SIZE                                        Shared memory size (default: 90g)
+#   EREBINE_AGENT_CUDA_TOOLKIT_DIR                 Host CUDA toolkit root (see CUDA COMPILER SUPPLY below)
+#   EREBINE_AGENT_CUDA_FETCH_COMPILER              Fetch the CUDA compiler from NVIDIA on start (default: 0)
+#
+# CUDA COMPILER SUPPLY (NVIDIA images only):
+#   This image ships no ptxas and no nvcc. NVIDIA's CUDA Toolkit EULA does not
+#   identify either as redistributable, so Erebine cannot publish them. Both
+#   are needed to compile GPU kernels at run time, and this image carries NO
+#   sm80, sm86 or sm89 cubins -- so AMPERE AND ADA GPUS WILL NOT SERVE without
+#   a compiler. Blackwell and Hopper have precompiled kernels and do serve.
+#
+#   Supply one by either route; the choice is yours:
+#
+#     1. MOUNTED. A CUDA toolkit already on the host, bind-mounted read-only.
+#        Nothing is downloaded. Found automatically at /usr/local/cuda,
+#        /usr/local/cuda-*, or /opt/cuda; name another location with
+#        EREBINE_AGENT_CUDA_TOOLKIT_DIR. Add to this service:
+#            volumes:
+#              - /usr/local/cuda:/usr/local/cuda:ro
+#
+#     2. FETCHED. Downloaded from NVIDIA on first start, verified against
+#        NVIDIA's published sha256 and cached for later starts. Off by
+#        default: a container that reaches the internet on boot should be
+#        asked to, not assume it. Add to this service:
+#            environment:
+#              EREBINE_AGENT_CUDA_FETCH_COMPILER: "1"
+#
+#   With neither, the agent still starts and still serves -- it warns once and
+#   names both routes. `erectl deploy agent eim` performs route 1 for you
+#   when the host has a toolkit, which is why an erectl-managed host needs
+#   nothing here.
 #
 # KERNEL SOCKET BUFFER TUNING (optional):
 #   The agent sets ZeroMQ socket buffers to 4 MiB for streaming throughput.
 #   Linux defaults net.core.wmem_max and net.core.rmem_max to 212992 bytes,
 #   which silently caps the requested buffer size. The agent will attempt to
-#   raise these limits on startup (requires privileged mode or CAP_SYS_ADMIN).
+#   raise these limits on startup, which works only for a privileged
+#   container on the HOST network (/proc/sys is read-only in every
+#   unprivileged container, and the knobs do not exist in a bridge
+#   network namespace at all -- CAP_SYS_ADMIN alone does not help).
 #
 #   If the container is not privileged, set these on the host before starting:
 #     sudo sysctl -w net.core.wmem_max=4194304
@@ -56,6 +90,14 @@ services:
     container_name: eim-vllm-cuda-0
     privileged: true
     shm_size: ${SHM_SIZE:-90g}
+    # Podman defaults a container to 2048 pids and counts threads; vLLM needs more.
+    pids_limit: -1
+    # No locked-memory limit, as erectl sets on every agent: NCCL over
+    # InfiniBand or RoCE registers memory against it.
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
     # For Docker Compose v2.3+ with NVIDIA Container Toolkit, use the following deploy section to request GPUs
     deploy:
       resources:
@@ -81,6 +123,14 @@ services:
     container_name: eim-vllm-cuda-1
     privileged: true
     shm_size: ${SHM_SIZE:-90g}
+    # Podman defaults a container to 2048 pids and counts threads; vLLM needs more.
+    pids_limit: -1
+    # No locked-memory limit, as erectl sets on every agent: NCCL over
+    # InfiniBand or RoCE registers memory against it.
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
     # For Docker Compose v2.3+ with NVIDIA Container Toolkit, use the following deploy section to request GPUs
     deploy:
       resources:
@@ -106,6 +156,14 @@ services:
     container_name: eim-vllm-cuda-2
     privileged: true
     shm_size: ${SHM_SIZE:-90g}
+    # Podman defaults a container to 2048 pids and counts threads; vLLM needs more.
+    pids_limit: -1
+    # No locked-memory limit, as erectl sets on every agent: NCCL over
+    # InfiniBand or RoCE registers memory against it.
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
     # For Docker Compose v2.3+ with NVIDIA Container Toolkit, use the following deploy section to request GPUs
     deploy:
       resources:

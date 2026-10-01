@@ -20,7 +20,7 @@
 #      sudo chown -R 5153:5153 /data/erebine-eem
 #
 #   4. Start the agent:
-#      docker compose -f docker-compose.agent-eem.yaml up -d
+#      docker compose -f compose/compose.agent-eem.yaml up -d
 #
 # ENVIRONMENT VARIABLES:
 #   EREBINE_AGENT_JOIN_KEY    [REQUIRED] Join key from Erebine dashboard
@@ -46,6 +46,13 @@ services:
   eem-agent:
     image: ${EEM_IMAGE:-ghcr.io/erebine/container-agents/eem:latest}
     container_name: erebine-eem-agent
+    # Container output goes to the journal on both runtimes: rootful
+    # podman on EL9 defaults to journald already, docker defaults to
+    # json-file and needs the pin. Entries carry the container name
+    # (journalctl -t erebine-eem-agent on podman; CONTAINER_NAME=
+    # erebine-eem-agent match on docker).
+    logging:
+      driver: journald
     restart: unless-stopped
     environment:
       # Every key below is spelled the way the agent's loader reads it
@@ -56,11 +63,21 @@ services:
       EREBINE_AGENT_JOIN_KEY: ${EREBINE_AGENT_JOIN_KEY:?EREBINE_AGENT_JOIN_KEY is required}
       EREBINE_EEM_ROUTER_URL: ${EREBINE_ROUTER_URL:?EREBINE_ROUTER_URL is required}
       EREBINE_EEM_REGISTRATION_NAME: ${EREBINE_AGENT_REGISTRATION_NAME:?EREBINE_AGENT_REGISTRATION_NAME is required}
+      # External id of the project the join key is bound to. Unset
+      # disables deep_think and the execution-memory / artifact /
+      # subplan primitives (router callbacks).
+      EREBINE_EEM_PROJECT_EXTERNAL_ID: ${EREBINE_EEM_PROJECT_EXTERNAL_ID:-}
       # Agent configuration (defaulted by image; override as needed)
       EREBINE_EEM_LOG_LEVEL: ${EEM_AGENT_LOG_LEVEL:-info}
       EREBINE_EEM_MAX_CONCURRENT_EXECUTIONS: ${EEM_AGENT_MAX_CONCURRENT:-20}
       EREBINE_EEM_CREDENTIALS_DIR: /var/lib/erebine/credentials
       EREBINE_EEM_SIGNING_KEY_PATH: /var/lib/eem/.config/erebine/agent-signing-key.hex
+      EREBINE_EEM_CURVE_KEY_PATH: /var/lib/eem/.config/erebine/agent-curve-key.hex
+      # Operator-declared workspaces. The agent's own default is
+      # /etc/erebine/workspaces.yaml, which this stack does not mount;
+      # pinning it here means the file lands in the config volume below,
+      # where `erectl workspaces declare` writes it.
+      EREBINE_EEM_WORKSPACES_FILE: /var/lib/eem/.config/erebine/workspaces.yaml
     volumes:
       # Workspace credentials (operator-managed)
       - /data/erebine-eem/credentials:/var/lib/erebine/credentials:ro
