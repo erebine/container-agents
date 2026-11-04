@@ -8,8 +8,14 @@
 # lightweight text-only dispatcher.
 #
 # QUICK START:
+#   `erectl deploy agent eem` runs every step below -- directories,
+#   compose stack, join key, start and verification -- on one host. The
+#   manual recipe is here for hosts that erectl cannot reach.
+#
 #   1. Get a join key from your Erebine dashboard:
-#      Dashboard -> Infrastructure -> Agents -> Generate Join Key
+#      Agents -> Execution (EEM) -> Enroll an EEM agent. The tab the
+#      button sits on supplies the execution role; there is no
+#      capability selector to set.
 #
 #   2. Set your join key and router URL:
 #      export EREBINE_AGENT_JOIN_KEY=ejk_your_key_here
@@ -39,6 +45,20 @@
 #   - The agent generates a persistent Ed25519 signing key on first run
 #     and writes it to /var/lib/eem/.config/erebine/agent-signing-key.hex
 #     (mode 0600) so CURVE rotation acks survive restart.
+#   - The Curve25519 CURVE key lands next to it at
+#     /var/lib/eem/.config/erebine/agent-curve-key.hex, inside the same
+#     persisted config volume.
+#   - The enrollment itself is recorded at
+#     /var/lib/eem/.config/erebine/agent-enrollment.json and restored on
+#     every later start, so the join key is presented exactly once and
+#     can be revoked as soon as the first start succeeds. Remove that
+#     file to enroll again, which needs a fresh key.
+#   - A key carries a fixed number of enrollment slots; the agents
+#     dashboard mints keys with one. A returning agent presenting its
+#     enrolled CURVE key claims no further slot, but one that comes back
+#     with a NEW CURVE key is a new machine and needs one -- so an agent
+#     that lost its config volume 401s against a spent key. Keep the
+#     volume, or mint a fresh key.
 #   - Subsequent restarts reuse the signing key; the router verifies
 #     rotation acks against the enrolled public key.
 
