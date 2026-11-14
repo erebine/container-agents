@@ -6,13 +6,14 @@
 #
 # Why this exists
 # ---------------
-# No image is built here. The Dockerfiles, the OCI license labels and the
-# license files inside the images all live in Erebine/platform. What this
-# repository ships is the instruction to pull and run those images, and three
+# No image is built here. Erebine builds the images, with their OCI license
+# labels and the license files inside them, and publishes them to
+# ghcr.io/erebine/container-agents. What this repository ships is the
+# instruction to pull and run those images, and three
 # documents that say what running them means:
 #
-#   LICENSE       the MIT text covering the Erebine layer, a copy of the
-#                 platform's Resources/licensing/erebine-binaries-MIT.txt.
+#   LICENSE       the MIT text covering the Erebine layer, the same text the
+#                 images carry at /usr/share/licenses/erebine/LICENSE.
 #   VENDOR_NOTICES the NVIDIA and AMD terms that bind anyone who runs the GPU
 #                 images. These restrict use and not only redistribution --
 #                 emotion recognition is prohibited outright on the NVIDIA
@@ -44,8 +45,9 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # anywhere else is not one whose terms these notices describe.
 REGISTRY="ghcr.io/erebine/container-agents"
 
-# Erebine/platform Resources/licensing/erebine-binaries-MIT.txt, byte for
-# byte. LICENSE is a copy of that file, so the comparison is exact.
+# The Erebine MIT text, byte for byte as the images carry it at
+# /usr/share/licenses/erebine/LICENSE. LICENSE is a copy, so the comparison
+# is exact.
 read -r -d '' CANONICAL_LICENSE <<'TXT' || true
 MIT License
 

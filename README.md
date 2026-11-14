@@ -33,6 +33,11 @@ To get started with Erebine.ai, simply clone the repository and follow the instr
 README file. The compose files are located in the `compose` directory, and you can choose
 the one that best suits your needs.
 
+This repository carries the compose files and the license notices, not the images' Dockerfiles.
+Erebine builds the images and publishes them to `ghcr.io/erebine/container-agents`; each image
+carries its license texts under `/usr/share/licenses/erebine/`, and the EIM documentation at
+https://erebine.ai/docs/eim lists every image and the compose file that runs it.
+
 Before running the compose files, make sure to set the `EREBINE_EIM_JOIN_KEY` environment
 variable with your join key. This key is required for the agent to connect to the Erebine
 network. You can obtain a join key from the Erebine dashboard.

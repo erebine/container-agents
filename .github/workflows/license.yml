@@ -1,5 +1,5 @@
 ---
-# License compliance for this repository (work order WI-11).
+# License compliance for this repository.
 #
 # Runs on every pull request and every push to main, and fails the build when
 # a compose file runs an image VENDOR_NOTICES does not name or that is not
@@ -8,8 +8,9 @@
 # terms it summarizes, when the README stops pointing at it, or when a
 # non-ASCII byte appears in any of them.
 #
-# No image is built or pulled here: the Dockerfiles and the images' own
-# license labels live in Erebine/platform. What this repository can get wrong
+# No image is built or pulled here: Erebine builds the images, with their own
+# license labels, and publishes them to ghcr.io/erebine/container-agents; their
+# Dockerfiles are not published. What this repository can get wrong
 # is the agreement between the compose files and the notices, and that is
 # entirely local -- the check resolves no registry, release or tag. The
 # script's own self-test runs first, so a check that has stopped checking
