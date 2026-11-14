@@ -224,6 +224,12 @@ check_tree() {
   return "$failed"
 }
 
+# Applies one sed expression to FILE in place. GNU and BSD sed spell -i
+# differently, so the edit goes through a temporary file instead.
+edit_in_place() {
+  sed "$1" "$2" >"$2.tmp" && mv "$2.tmp" "$2"
+}
+
 # Builds fixture trees and proves the check fails on an image no notice
 # covers, an image from the wrong registry, an edited license text, a lost
 # vendor terms link, a README that stops pointing at the notice, a missing
@@ -278,13 +284,13 @@ services:
 YML
         ;;
       wrong-registry)
-        sed -i 's|ghcr.io/erebine/container-agents|ghcr.io/xerotier/container-agents|' \
+        edit_in_place 's|ghcr.io/erebine/container-agents|ghcr.io/xerotier/container-agents|' \
           "$bad/compose/compose.agent-nvidia.yaml" ;;
       edited-license)
-        sed -i 's/without restriction, including/for evaluation only, including/' \
+        edit_in_place 's/without restriction, including/for evaluation only, including/' \
           "$bad/LICENSE" ;;
       lost-terms-link)
-        sed -i '\|rocm.docs.amd.com|d' "$bad/VENDOR_NOTICES" ;;
+        edit_in_place '\|rocm.docs.amd.com|d' "$bad/VENDOR_NOTICES" ;;
       readme-drops-notice)
         printf 'Getting started.\n' >"$bad/README.md" ;;
       missing-vendor-notices)
