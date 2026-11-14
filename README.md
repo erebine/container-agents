@@ -33,7 +33,7 @@ To get started with Erebine.ai, simply clone the repository and follow the instr
 README file. The compose files are located in the `compose` directory, and you can choose
 the one that best suits your needs.
 
-Before running the compose files, make sure to set the `EREBINE_AGENT_JOIN_KEY` environment
+Before running the compose files, make sure to set the `EREBINE_EIM_JOIN_KEY` environment
 variable with your join key. This key is required for the agent to connect to the Erebine
 network. You can obtain a join key from the Erebine dashboard.
 
@@ -49,15 +49,18 @@ and customize the compose files for your specific use case.
 Basic execution is as simple as running the following commands in your terminal:
 
 ``` shell
-export EREBINE_AGENT_JOIN_KEY=xxxxxxxx
+export EREBINE_EIM_JOIN_KEY=xxxxxxxx
+export RENDER_GID="$(getent group render | cut -d: -f3)"
+export VIDEO_GID="$(getent group video | cut -d: -f3)"
 sudo podman compose -f compose/compose.agent-amd-rocm.yaml down
 sudo -E podman compose -f compose/compose.agent-amd-rocm.yaml up -d
 sudo podman logs eim-vllm-rocm -f
 ```
 
-* The first command sets the required environment variable for the join key.
-* The second command ensures that any existing containers are stopped and removed.
-* The third command starts the new containers in detached mode.
+* The first three commands set the join key and the host's render and video group ids, which
+  the ROCm and Intel files pass to the container by number.
+* The `down` command ensures that any existing containers are stopped and removed.
+* The `up -d` command starts the new containers in detached mode.
 * The last command allows you to view the logs of the running container in real-time.
 
 ### Optional system configuration

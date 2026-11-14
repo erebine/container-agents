@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: MIT
-# Erebine Agent - NVIDIA MIG Stack (two agents, one physical GPU)
+# Erebine Inference Microservice (EIM) - NVIDIA MIG Stack (two EIMs, one physical GPU)
 #
-# Deploys two EIM agents pinned to two MIG instances carved from a single
-# NVIDIA A30. Each agent gets a hard-partitioned 2g.12gb slice (11.75 GiB,
+# Deploys two EIMs pinned to two MIG instances carved from a single
+# NVIDIA A30. Each EIM gets a hard-partitioned 2g.12gb slice (11.75 GiB,
 # 28 SMs), so neither can starve the other and neither sees the other's
 # memory.
 #
@@ -22,7 +22,7 @@
 #      2g.12gb on the A30; re-read -lgip if your board reports a different ID:
 #      sudo nvidia-smi mig -cgi 5,5 -C
 #
-#   4. Collect the two MIG UUIDs and paste them into device_ids below:
+#   4. Collect the two MIG UUIDs; they become EREBINE_MIG_UUID_0 and _1:
 #      nvidia-smi -L
 #
 #   5. REGENERATE THE CDI SPEC. Podman resolves devices through CDI, and the
@@ -34,7 +34,7 @@
 #      Regenerate and then confirm the names:
 #        sudo nvidia-ctk cdi generate --output=/var/run/cdi/nvidia.yaml
 #        nvidia-ctk cdi list
-#      USE THE NAMES cdi list PRINTS in device_ids below. Depending on the
+#      USE THE NAMES cdi list PRINTS as EREBINE_MIG_UUID_0 and _1. Depending on the
 #      generator's device-name strategy they may be UUID-form
 #      (nvidia.com/gpu=MIG-<uuid>) or index-form (nvidia.com/gpu=0:0). Pass
 #      --device-name-strategy=uuid if you want the UUID form; check
@@ -49,17 +49,17 @@
 #   device error on every boot.
 #
 # WHAT MIG BUYS YOU:
-#   Two 2g.12gb slices at 0.90 utilization give each agent about 10.6 GiB --
+#   Two 2g.12gb slices at 0.90 utilization give each EIM about 10.6 GiB --
 #   the same total as running both unpartitioned at 0.45 on the shared board.
 #   The gain is isolation and deterministic startup: no free-memory race
-#   between agents at launch. The cost is 28 SMs each with no ability to
-#   borrow idle compute, so a bursty single-agent workload gets roughly half
+#   between EIMs at launch. The cost is 28 SMs each with no ability to
+#   borrow idle compute, so a bursty single-EIM workload gets roughly half
 #   the throughput it would have on the whole card. If you do not need the
 #   isolation, compose.multi-agent-nvidia.yaml (shared board, split
 #   utilization) is the simpler deployment.
 #
 # WHY MAX_MODEL_LEN IS PINNED BELOW:
-#   Agent GPU detection shells out to nvidia-smi --query-gpu=memory.total,
+#   EIM GPU detection shells out to nvidia-smi --query-gpu=memory.total,
 #   which reports the PHYSICAL board (24576 MiB) and not the MIG slice the
 #   container actually receives. AutoConfigurator would therefore size context
 #   length against roughly double the memory that exists. Pin the context
@@ -69,28 +69,34 @@
 #   A privileged container can see all /dev/nvidia* nodes, which can defeat
 #   MIG device pinning. After first start, confirm isolation held:
 #     podman exec eim-vllm-mig-0 nvidia-smi -L
-#   It must list exactly ONE MIG device. Because privileged is off, the agent
+#   It must list exactly ONE MIG device. Because privileged is off, the EIM
 #   cannot raise socket buffers itself -- set them on the host:
 #     sudo sysctl -w net.core.wmem_max=4194304
 #     sudo sysctl -w net.core.rmem_max=4194304
 #   Persist in /etc/sysctl.d/99-erebine.conf.
+#   cap_add SYS_NICE stands in for the one thing privilege gave vLLM's NUMA
+#   binding: docker's default seccomp profile admits the memory-policy
+#   syscalls (get_mempolicy, mbind) only with it. The EIM runs as a non-root
+#   user, so it gains no effective capability. Podman needs neither.
 #
 # QUICK START:
 #   sudo mkdir -p /data/erebine/agent{0,1}/{models,config,vllm-cache}
 #   sudo chown -R 5152:5152 /data/erebine
-#   export EREBINE_AGENT_JOIN_KEY=ejk_your_key_here
+#   export EREBINE_EIM_JOIN_KEY=ejk_your_key_here
+#   export EREBINE_MIG_UUID_0=<first name from step 5>
+#   export EREBINE_MIG_UUID_1=<second name from step 5>
 #   sudo -E podman compose -f compose/compose.multi-agent-nvidia-mig.yaml up -d
 #
 # ENVIRONMENT VARIABLES:
-#   EREBINE_AGENT_JOIN_KEY                 [REQUIRED] Join key (first run only)
+#   EREBINE_EIM_JOIN_KEY                   [REQUIRED] Join key (first run only)
 #   EREBINE_MIG_UUID_0                     [REQUIRED] MIG UUID for agent0
 #   EREBINE_MIG_UUID_1                     [REQUIRED] MIG UUID for agent1
-#   EREBINE_AGENT_GPU_MEMORY_UTILIZATION   Fraction of the MIG SLICE (default below: 0.90)
-#   EREBINE_AGENT_MAX_MODEL_LEN            Context length; pin it, see note above
-#   EREBINE_AGENT_LOG_LEVEL                trace, debug, info, warning, error (default: info)
+#   EREBINE_EIM_GPU_MEMORY_UTILIZATION     Fraction of the MIG SLICE (default below: 0.90)
+#   EREBINE_EIM_MAX_MODEL_LEN              Context length; pin it, see note above
+#   EREBINE_EIM_LOG_LEVEL                  trace, debug, info, warning, error (default: info)
 #   SHM_SIZE                               Shared memory size (default: 16g)
-#   EREBINE_AGENT_CUDA_TOOLKIT_DIR         Host CUDA toolkit root (see CUDA COMPILER SUPPLY below)
-#   EREBINE_AGENT_CUDA_FETCH_COMPILER      Fetch the CUDA compiler from NVIDIA on start (default: 0)
+#   EREBINE_EIM_CUDA_TOOLKIT_DIR           Host CUDA toolkit root (see CUDA COMPILER SUPPLY below)
+#   EREBINE_EIM_CUDA_FETCH_COMPILER        Fetch the CUDA compiler from NVIDIA on start (default: 0)
 #
 # CUDA COMPILER SUPPLY (NVIDIA images only):
 #   This image ships no ptxas and no nvcc. NVIDIA's CUDA Toolkit EULA does not
@@ -104,7 +110,7 @@
 #     1. MOUNTED. A CUDA toolkit already on the host, bind-mounted read-only.
 #        Nothing is downloaded. Found automatically at /usr/local/cuda,
 #        /usr/local/cuda-*, or /opt/cuda; name another location with
-#        EREBINE_AGENT_CUDA_TOOLKIT_DIR. Add to this service:
+#        EREBINE_EIM_CUDA_TOOLKIT_DIR. Add to this service:
 #            volumes:
 #              - /usr/local/cuda:/usr/local/cuda:ro
 #
@@ -113,10 +119,10 @@
 #        default: a container that reaches the internet on boot should be
 #        asked to, not assume it. Add to this service:
 #            environment:
-#              EREBINE_AGENT_CUDA_FETCH_COMPILER: "1"
+#              EREBINE_EIM_CUDA_FETCH_COMPILER: "1"
 #
-#   With neither, the agent still starts and still serves -- it warns once and
-#   names both routes. `erectl deploy agent eim` performs route 1 for you
+#   With neither, the EIM still starts and still serves -- it warns once and
+#   names both routes. `erectl deploy eim` performs route 1 for you
 #   when the host has a toolkit, which is why an erectl-managed host needs
 #   nothing here.
 
@@ -126,13 +132,17 @@ services:
     container_name: eim-vllm-mig-0
     shm_size: ${SHM_SIZE:-16g}
     # Podman defaults a container to 2048 pids and counts threads; vLLM needs more.
+    # NCCL over InfiniBand or RoCE registers memory against memlock: no limit either.
+    # libdispatch starts its worker threads at nice -2; uid 5152 holds no capabilities,
+    # so it needs this raw RLIMIT_NICE (24 allows nice -4).
     pids_limit: -1
-    # No locked-memory limit, as erectl sets on every agent: NCCL over
-    # InfiniBand or RoCE registers memory against it.
     ulimits:
       memlock:
         soft: -1
         hard: -1
+      nice:
+        soft: 24
+        hard: 24
     deploy:
       resources:
         reservations:
@@ -142,6 +152,9 @@ services:
               # expose every device on the host to this container.
               device_ids: ["${EREBINE_MIG_UUID_0:?set EREBINE_MIG_UUID_0 from nvidia-smi -L}"]
               capabilities: [gpu]
+    # NUMA memory-policy syscalls under docker's default seccomp profile.
+    cap_add:
+      - SYS_NICE
     volumes:
       # Persistent model cache
       - /data/erebine/agent0/models:/var/lib/inference/.cache/erebine/models
@@ -150,13 +163,27 @@ services:
       # Persistent enrollment state
       - /data/erebine/agent0/config:/var/lib/inference/.config/erebine
     environment:
+      # Each operator setting is passed under its EREBINE_EIM_* name and
+      # under its pre-2.10 EREBINE_AGENT_* name, so a .env written for an
+      # older release keeps working: the EIM reads the old name only when
+      # the new one is empty, and warns once at startup.
       # Model is assigned from the dashboard during enrollment
-      EREBINE_AGENT_LOG_LEVEL: "${EREBINE_AGENT_LOG_LEVEL:-info}"
+      EREBINE_EIM_LOG_LEVEL: "${EREBINE_EIM_LOG_LEVEL:-}"
+      EREBINE_AGENT_LOG_LEVEL: "${EREBINE_AGENT_LOG_LEVEL:-}"
+      EREBINE_EIM_JOIN_KEY: "${EREBINE_EIM_JOIN_KEY:-}"
       EREBINE_AGENT_JOIN_KEY: "${EREBINE_AGENT_JOIN_KEY:-}"
       # Fraction of the 11.75 GiB MIG slice, not of the 24 GiB board. The
       # slice is exclusively ours, so this can run high.
-      EREBINE_AGENT_GPU_MEMORY_UTILIZATION: "${EREBINE_AGENT_GPU_MEMORY_UTILIZATION:-0.90}"
-      EREBINE_AGENT_MAX_MODEL_LEN: "${EREBINE_AGENT_MAX_MODEL_LEN:-1024}"
+      EREBINE_EIM_GPU_MEMORY_UTILIZATION: "${EREBINE_EIM_GPU_MEMORY_UTILIZATION:-}"
+      EREBINE_AGENT_GPU_MEMORY_UTILIZATION: "${EREBINE_AGENT_GPU_MEMORY_UTILIZATION:-}"
+      # This file's default. The image entrypoint applies it only when
+      # neither name above holds a value, so an old .env value still wins.
+      EREBINE_DEFAULT_EIM_GPU_MEMORY_UTILIZATION: "0.90"
+      EREBINE_EIM_MAX_MODEL_LEN: "${EREBINE_EIM_MAX_MODEL_LEN:-}"
+      EREBINE_AGENT_MAX_MODEL_LEN: "${EREBINE_AGENT_MAX_MODEL_LEN:-}"
+      # This file's default. The image entrypoint applies it only when
+      # neither name above holds a value, so an old .env value still wins.
+      EREBINE_DEFAULT_EIM_MAX_MODEL_LEN: "1024"
     restart: unless-stopped
 
   agent1:
@@ -164,13 +191,17 @@ services:
     container_name: eim-vllm-mig-1
     shm_size: ${SHM_SIZE:-16g}
     # Podman defaults a container to 2048 pids and counts threads; vLLM needs more.
+    # NCCL over InfiniBand or RoCE registers memory against memlock: no limit either.
+    # libdispatch starts its worker threads at nice -2; uid 5152 holds no capabilities,
+    # so it needs this raw RLIMIT_NICE (24 allows nice -4).
     pids_limit: -1
-    # No locked-memory limit, as erectl sets on every agent: NCCL over
-    # InfiniBand or RoCE registers memory against it.
     ulimits:
       memlock:
         soft: -1
         hard: -1
+      nice:
+        soft: 24
+        hard: 24
     deploy:
       resources:
         reservations:
@@ -178,6 +209,9 @@ services:
             - driver: nvidia
               device_ids: ["${EREBINE_MIG_UUID_1:?set EREBINE_MIG_UUID_1 from nvidia-smi -L}"]
               capabilities: [gpu]
+    # NUMA memory-policy syscalls under docker's default seccomp profile.
+    cap_add:
+      - SYS_NICE
     volumes:
       # Persistent model cache
       - /data/erebine/agent1/models:/var/lib/inference/.cache/erebine/models
@@ -186,9 +220,23 @@ services:
       # Persistent enrollment state
       - /data/erebine/agent1/config:/var/lib/inference/.config/erebine
     environment:
+      # Each operator setting is passed under its EREBINE_EIM_* name and
+      # under its pre-2.10 EREBINE_AGENT_* name, so a .env written for an
+      # older release keeps working: the EIM reads the old name only when
+      # the new one is empty, and warns once at startup.
       # Model is assigned from the dashboard during enrollment
-      EREBINE_AGENT_LOG_LEVEL: "${EREBINE_AGENT_LOG_LEVEL:-info}"
+      EREBINE_EIM_LOG_LEVEL: "${EREBINE_EIM_LOG_LEVEL:-}"
+      EREBINE_AGENT_LOG_LEVEL: "${EREBINE_AGENT_LOG_LEVEL:-}"
+      EREBINE_EIM_JOIN_KEY: "${EREBINE_EIM_JOIN_KEY:-}"
       EREBINE_AGENT_JOIN_KEY: "${EREBINE_AGENT_JOIN_KEY:-}"
-      EREBINE_AGENT_GPU_MEMORY_UTILIZATION: "${EREBINE_AGENT_GPU_MEMORY_UTILIZATION:-0.90}"
-      EREBINE_AGENT_MAX_MODEL_LEN: "${EREBINE_AGENT_MAX_MODEL_LEN:-1024}"
+      EREBINE_EIM_GPU_MEMORY_UTILIZATION: "${EREBINE_EIM_GPU_MEMORY_UTILIZATION:-}"
+      EREBINE_AGENT_GPU_MEMORY_UTILIZATION: "${EREBINE_AGENT_GPU_MEMORY_UTILIZATION:-}"
+      # This file's default. The image entrypoint applies it only when
+      # neither name above holds a value, so an old .env value still wins.
+      EREBINE_DEFAULT_EIM_GPU_MEMORY_UTILIZATION: "0.90"
+      EREBINE_EIM_MAX_MODEL_LEN: "${EREBINE_EIM_MAX_MODEL_LEN:-}"
+      EREBINE_AGENT_MAX_MODEL_LEN: "${EREBINE_AGENT_MAX_MODEL_LEN:-}"
+      # This file's default. The image entrypoint applies it only when
+      # neither name above holds a value, so an old .env value still wins.
+      EREBINE_DEFAULT_EIM_MAX_MODEL_LEN: "1024"
     restart: unless-stopped

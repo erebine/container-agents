@@ -13,6 +13,17 @@ of these images is subject to them.
                        said here about that image applies to it.
   eim-vllm-rocm        AMD. Built on rocm/dev-ubuntu-24.04. Contains
                        the ROCm stack.
+  eim-vllm-omix        Intel. Contains Intel's GPU driver stack (the
+                       Level Zero loader, the compute runtime, the
+                       graphics compiler, xpu-smi) under MIT,
+                       BSD-3-Clause and Apache-2.0, and the oneAPI Math
+                       Kernel Library and Threading Building Blocks,
+                       unmodified, under the Intel Simplified Software
+                       License. It contains no software under Intel's
+                       End User License Agreement for Developer Tools.
+                       Its inventory of Intel components, with the path
+                       of each one's license text, is in the image at
+                       /usr/share/licenses/erebine/intel/INVENTORY.tsv.
 
 The eim-vllm-cpu, eim-vllm-zendnn and eem images are built on
 debian:trixie-slim, not on a vendor base image. No vendor license

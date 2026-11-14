@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
-# Erebine Agent - CPU Inference Stack (AMD ZenDNN)
+# Erebine Inference Microservice (EIM) - CPU Inference Stack (AMD ZenDNN)
 #
-# Deploys a EIM CPU node for inference without GPU acceleration.
+# Deploys an EIM CPU node for inference without GPU acceleration.
 # ZenTorch optimization for AMD EPYC CPUs is available as an opt-in image tag.
 # KV cache lives in host RAM and is managed directly by vLLM; no external
 # cache sidecar is required.
@@ -15,41 +15,44 @@
 #      Dashboard -> Infrastructure -> Agents -> Generate Join Key
 #
 #   2. Set your join key:
-#      export EREBINE_AGENT_JOIN_KEY=ejk_your_key_here
+#      export EREBINE_EIM_JOIN_KEY=ejk_your_key_here
 #
 #   3. Create host directories with correct permissions:
-#      sudo mkdir -p /data/erebine/models /data/erebine/config
+#      sudo mkdir -p /data/erebine/models /data/erebine/config /data/erebine/vllm-cache
 #      sudo chown -R 5152:5152 /data/erebine
 #
-#   4. Start the agent:
+#   4. Start the EIM:
 #      docker compose -f compose/compose.agent-amd-cpu-zendnn.yaml up -d
 #
 # ENROLLMENT WORKFLOW:
-#   - On first start, the agent enrolls using your join key
+#   - On first start, the EIM enrolls using your join key
 #   - Enrollment state is persisted to /data/erebine/config
-#   - On subsequent restarts, the agent reconnects automatically
-#   - You can remove EREBINE_AGENT_JOIN_KEY after successful enrollment
+#   - On subsequent restarts, the EIM reconnects automatically
+#   - You can remove EREBINE_EIM_JOIN_KEY after successful enrollment
 #
 # ENVIRONMENT VARIABLES:
-#   EREBINE_AGENT_JOIN_KEY              [REQUIRED] Join key from Erebine dashboard (first run only)
-#   EREBINE_AGENT_MAX_CONCURRENT        Optional ceiling for concurrent requests (auto-configured when not set)
-#   EREBINE_AGENT_OVERPROVISION_FACTOR  Safe-to-admit slot factor, at least 1.0 (default: 1.5)
-#   EREBINE_AGENT_LOG_LEVEL             Logging level: trace, debug, info, warning, error (default: info)
-#   EREBINE_AGENT_MODEL_CACHE_MAX_SIZE_GB Local model cache size in GB (default: 100)
+#   EREBINE_EIM_JOIN_KEY                [REQUIRED] Join key from Erebine dashboard (first run only)
+#   EREBINE_EIM_MAX_CONCURRENT          Optional ceiling for concurrent requests (auto-configured when not set)
+#   EREBINE_EIM_OVERPROVISION_FACTOR    Safe-to-admit slot factor, at least 1.0 (default: 1.5)
+#   EREBINE_EIM_LOG_LEVEL               Logging level: trace, debug, info, warning, error (default: info)
+#   EREBINE_EIM_MODEL_CACHE_MAX_SIZE_GB Local model cache size in GB (default: 100)
 #   SHM_SIZE                             Shared memory size (default: 90g)
 #
-# CPU TUNING (auto-computed by the agent; override via EREBINE_AGENT_VLLM_ENV if needed):
-#   VLLM_CPU_OMP_THREADS_BIND            CPU thread binding range (auto: 0-{nproc-1})
-#   VLLM_CPU_NUM_OF_RESERVED_CPU         Reserved CPUs for system (auto: 1)
+# CPU TUNING (auto-computed by the EIM; override via EREBINE_EIM_VLLM_ENV if needed):
+#   VLLM_CPU_OMP_THREADS_BIND            CPU thread binding (auto: vLLM NUMA-aware binding; the
+#                                        allowed CPUs as a list when the first allowed memory
+#                                        node has none)
+#   VLLM_CPU_NUM_OF_RESERVED_CPU         Cores kept for vLLM's API server and engine core; applied
+#                                        only with auto thread binding (auto: 1)
 #   VLLM_CPU_KVCACHE_SPACE               KV cache memory in GB (auto: totalRAM - model - overhead)
 #   OMP_NUM_THREADS                       OpenMP threads (auto: physical core count)
 #   OMP_PROC_BIND                         Pin threads to cores (auto: TRUE)
 #   OMP_WAIT_POLICY                       Thread wait strategy (auto: PASSIVE)
 #
 # KERNEL SOCKET BUFFER TUNING (optional):
-#   The agent sets ZeroMQ socket buffers to 4 MiB for streaming throughput.
+#   The EIM sets ZeroMQ socket buffers to 4 MiB for streaming throughput.
 #   Linux defaults net.core.wmem_max and net.core.rmem_max to 212992 bytes,
-#   which silently caps the requested buffer size. The agent will attempt to
+#   which silently caps the requested buffer size. The EIM will attempt to
 #   raise these limits on startup, which works only for a privileged
 #   container on the HOST network (/proc/sys is read-only in every
 #   unprivileged container, and the knobs do not exist in a bridge
@@ -77,13 +80,17 @@ services:
       - CAP_SYS_ADMIN
     shm_size: ${SHM_SIZE:-90g}
     # Podman defaults a container to 2048 pids and counts threads; vLLM needs more.
+    # NCCL over InfiniBand or RoCE registers memory against memlock: no limit either.
+    # libdispatch starts its worker threads at nice -2; uid 5152 holds no capabilities,
+    # so it needs this raw RLIMIT_NICE (24 allows nice -4).
     pids_limit: -1
-    # No locked-memory limit, as erectl sets on every agent: NCCL over
-    # InfiniBand or RoCE registers memory against it.
     ulimits:
       memlock:
         soft: -1
         hard: -1
+      nice:
+        soft: 24
+        hard: 24
     # No command - entrypoint handles enrollment + run automatically
     volumes:
       # Persistent model cache
@@ -93,8 +100,14 @@ services:
       # Persistent enrollment state
       - /data/erebine/config:/var/lib/inference/.config/erebine
     environment:
-      # Agent Enrollment [REQUIRED for first run]
+      # Each operator setting is passed under its EREBINE_EIM_* name and
+      # under its pre-2.10 EREBINE_AGENT_* name, so a .env written for an
+      # older release keeps working: the EIM reads the old name only when
+      # the new one is empty, and warns once at startup.
+      # EIM enrollment [REQUIRED for first run]
+      EREBINE_EIM_JOIN_KEY: ${EREBINE_EIM_JOIN_KEY:-}
       EREBINE_AGENT_JOIN_KEY: ${EREBINE_AGENT_JOIN_KEY:-}
-      # Agent Configuration
-      EREBINE_AGENT_LOG_LEVEL: ${EREBINE_AGENT_LOG_LEVEL:-info}
+      # EIM configuration
+      EREBINE_EIM_LOG_LEVEL: ${EREBINE_EIM_LOG_LEVEL:-}
+      EREBINE_AGENT_LOG_LEVEL: ${EREBINE_AGENT_LOG_LEVEL:-}
     restart: unless-stopped

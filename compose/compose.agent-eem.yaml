@@ -1,48 +1,60 @@
 # SPDX-License-Identifier: MIT
-# Erebine Agent - EEM Execution Stack
+# Erebine Execution Manager (EEM) - Execution Stack
 #
-# Deploys a single EEM (Execution Management) agent that enrolls
-# with an already-running Erebine router and dispatches
-# infrastructure tool calls. Unlike the EIM inference agents this
-# stack does not bundle a GPU or vLLM runtime -- the EEM agent is a
-# lightweight text-only dispatcher.
+# Deploys a single Erebine Execution Manager (EEM) that enrolls with an
+# already-running Erebine router and dispatches infrastructure tool
+# calls. Unlike an Erebine Inference Microservice (EIM) this stack does
+# not bundle a GPU or vLLM runtime -- the EEM is a lightweight text-only
+# dispatcher.
 #
 # QUICK START:
-#   `erectl deploy agent eem` runs every step below -- directories,
+#   `erectl deploy eem` runs every step below -- directories,
 #   compose stack, join key, start and verification -- on one host. The
 #   manual recipe is here for hosts that erectl cannot reach.
 #
 #   1. Get a join key from your Erebine dashboard:
-#      Agents -> Execution (EEM) -> Enroll an EEM agent. The tab the
+#      Agents -> Execution (EEM) -> Enroll a EEM agent. The tab the
 #      button sits on supplies the execution role; there is no
 #      capability selector to set.
 #
-#   2. Set your join key and router URL:
-#      export EREBINE_AGENT_JOIN_KEY=ejk_your_key_here
+#   2. Set your join key, router URL and registration name:
+#      export EREBINE_EEM_JOIN_KEY=ejk_your_key_here
 #      export EREBINE_ROUTER_URL=https://router.example.com
+#      export EREBINE_EEM_REGISTRATION_NAME=my-eem
 #
 #   3. Create host directories with correct permissions:
 #      sudo mkdir -p /data/erebine-eem/{credentials,state,config}
 #      sudo chown -R 5153:5153 /data/erebine-eem
 #
-#   4. Start the agent:
+#   4. Start the EEM:
 #      docker compose -f compose/compose.agent-eem.yaml up -d
 #
 # ENVIRONMENT VARIABLES:
-#   EREBINE_AGENT_JOIN_KEY    [REQUIRED] Join key from Erebine dashboard
+#   EREBINE_EEM_JOIN_KEY      [REQUIRED for the first start] Join key from
+#                              the Erebine dashboard
 #   EREBINE_ROUTER_URL        [REQUIRED] HTTPS enrollment URL of the router
-#   EREBINE_AGENT_REGISTRATION_NAME
-#                              [REQUIRED] Unique per-project name for this agent
+#   EREBINE_EEM_REGISTRATION_NAME
+#                              [REQUIRED] Unique per-project name for this EEM
 #                              (kebab-case or alphanumeric, max 48 chars)
 #   EEM_IMAGE                  Container image name
 #                              (default: ghcr.io/erebine/container-agents/eem:latest)
-#   EEM_AGENT_LOG_LEVEL        Logging level: trace, debug, info, warning,
+#   EREBINE_EEM_LOG_LEVEL      Logging level: trace, debug, info, warning,
 #                              error, critical (default: info)
-#   EEM_AGENT_MAX_CONCURRENT   Max concurrent tool executions (default: 20)
+#   EREBINE_EEM_MAX_CONCURRENT Max concurrent tool executions (default: 20)
+#
+#   Before 2.10 this file read EREBINE_AGENT_JOIN_KEY,
+#   EREBINE_AGENT_REGISTRATION_NAME, EEM_AGENT_LOG_LEVEL and
+#   EEM_AGENT_MAX_CONCURRENT. EREBINE_AGENT_JOIN_KEY still works: it is
+#   passed to the EEM, which reads it only when EREBINE_EEM_JOIN_KEY is
+#   empty and logs one warning at startup. The other three are host-only
+#   names Compose cannot alias without nested interpolation, which
+#   podman-compose lacks, so rename them in .env when you adopt this
+#   version of the file. A host that keeps its older copy of this file
+#   needs no change.
 #
 # ENROLLMENT WORKFLOW:
-#   - On first start the agent enrolls against the configured router
-#   - The agent generates a persistent Ed25519 signing key on first run
+#   - On first start the EEM enrolls against the configured router
+#   - The EEM generates a persistent Ed25519 signing key on first run
 #     and writes it to /var/lib/eem/.config/erebine/agent-signing-key.hex
 #     (mode 0600) so CURVE rotation acks survive restart.
 #   - The Curve25519 CURVE key lands next to it at
@@ -53,12 +65,12 @@
 #     every later start, so the join key is presented exactly once and
 #     can be revoked as soon as the first start succeeds. Remove that
 #     file to enroll again, which needs a fresh key.
-#   - A key carries a fixed number of enrollment slots; the agents
-#     dashboard mints keys with one. A returning agent presenting its
-#     enrolled CURVE key claims no further slot, but one that comes back
-#     with a NEW CURVE key is a new machine and needs one -- so an agent
-#     that lost its config volume 401s against a spent key. Keep the
-#     volume, or mint a fresh key.
+#   - A key carries a fixed number of enrollment slots; the dashboard
+#     mints keys with one. A returning EEM presenting its enrolled CURVE
+#     key claims no further slot, but one that comes back with a NEW
+#     CURVE key is a new machine and needs one -- so an EEM that lost its
+#     config volume 401s against a spent key. Keep the volume, or mint a
+#     fresh key.
 #   - Subsequent restarts reuse the signing key; the router verifies
 #     rotation acks against the enrolled public key.
 
@@ -75,35 +87,62 @@ services:
       driver: journald
     restart: unless-stopped
     environment:
-      # Every key below is spelled the way the agent's loader reads it
+      # Every key below is spelled the way the EEM's loader reads it
       # first. The loader still answers to the historical bare EEM_*
       # names, and this stack writes none of them.
       #
-      # Enrollment [REQUIRED for first run]
-      EREBINE_AGENT_JOIN_KEY: ${EREBINE_AGENT_JOIN_KEY:?EREBINE_AGENT_JOIN_KEY is required}
+      # Enrollment [REQUIRED for first run]. The join key is passed under
+      # its name and under the deprecated EREBINE_AGENT_JOIN_KEY, which
+      # the EEM reads only when EREBINE_EEM_JOIN_KEY is empty; so neither
+      # carries a `:?` guard, and the EEM stops at startup, naming the
+      # missing key, when both are empty and it has no saved enrollment.
+      EREBINE_EEM_JOIN_KEY: ${EREBINE_EEM_JOIN_KEY:-}
+      EREBINE_AGENT_JOIN_KEY: ${EREBINE_AGENT_JOIN_KEY:-}
       EREBINE_EEM_ROUTER_URL: ${EREBINE_ROUTER_URL:?EREBINE_ROUTER_URL is required}
-      EREBINE_EEM_REGISTRATION_NAME: ${EREBINE_AGENT_REGISTRATION_NAME:?EREBINE_AGENT_REGISTRATION_NAME is required}
+      EREBINE_EEM_REGISTRATION_NAME: ${EREBINE_EEM_REGISTRATION_NAME:?EREBINE_EEM_REGISTRATION_NAME is required}
       # External id of the project the join key is bound to. Unset
       # disables deep_think and the execution-memory / artifact /
       # subplan primitives (router callbacks).
       EREBINE_EEM_PROJECT_EXTERNAL_ID: ${EREBINE_EEM_PROJECT_EXTERNAL_ID:-}
-      # Agent configuration (defaulted by image; override as needed)
-      EREBINE_EEM_LOG_LEVEL: ${EEM_AGENT_LOG_LEVEL:-info}
-      EREBINE_EEM_MAX_CONCURRENT_EXECUTIONS: ${EEM_AGENT_MAX_CONCURRENT:-20}
+      # EEM configuration (defaulted by the image; override as needed)
+      EREBINE_EEM_LOG_LEVEL: ${EREBINE_EEM_LOG_LEVEL:-info}
+      EREBINE_EEM_MAX_CONCURRENT_EXECUTIONS: ${EREBINE_EEM_MAX_CONCURRENT:-20}
       EREBINE_EEM_CREDENTIALS_DIR: /var/lib/erebine/credentials
       EREBINE_EEM_SIGNING_KEY_PATH: /var/lib/eem/.config/erebine/agent-signing-key.hex
       EREBINE_EEM_CURVE_KEY_PATH: /var/lib/eem/.config/erebine/agent-curve-key.hex
-      # Operator-declared workspaces. The agent's own default is
+      # Operator-declared workspaces. The EEM's own default is
       # /etc/erebine/workspaces.yaml, which this stack does not mount;
       # pinning it here means the file lands in the config volume below,
       # where `erectl workspaces declare` writes it.
       EREBINE_EEM_WORKSPACES_FILE: /var/lib/eem/.config/erebine/workspaces.yaml
+    # The z and Z suffixes relabel the host directories for SELinux. This
+    # container is not privileged, so on an enforcing host it runs
+    # confined and cannot open a directory labelled default_t (a fresh
+    # directory under /data): without them the EEM cannot write its
+    # signing key or open its queue and restarts in a loop. Z is a
+    # private label for directories only this EEM uses; z is a shared
+    # label for the credentials, which other containers may also mount.
+    # Both are ignored on hosts without SELinux. Never point either at a
+    # system directory such as /etc or /usr: the relabel rewrites the
+    # host's own labels.
     volumes:
       # Workspace credentials (operator-managed)
-      - /data/erebine-eem/credentials:/var/lib/erebine/credentials:ro
+      - /data/erebine-eem/credentials:/var/lib/erebine/credentials:ro,z
       # Runtime state (leases, queues, offline fail-safe)
-      - /data/erebine-eem/state:/var/lib/erebine/state
+      - /data/erebine-eem/state:/var/lib/erebine/state:Z
       # Persistent signing key + enrollment state
-      - /data/erebine-eem/config:/var/lib/eem/.config/erebine
+      - /data/erebine-eem/config:/var/lib/eem/.config/erebine:Z
+    # The EEM runs as uid 5153 with no capabilities. Linux libdispatch
+    # starts its user-initiated worker threads (the ZeroMQ socket, command
+    # output drains) at nice -2, which needs an RLIMIT_NICE that reaches
+    # it; without one every start fails with EACCES and the thread stays at
+    # nice 0 (libdispatch logs "Failed to set thread priority for worker
+    # thread" to syslog, which this container has no socket for; set
+    # LIBDISPATCH_LOG=stderr to see it). The value is the raw rlimit: 24
+    # allows nice -4, the highest priority libdispatch asks for.
+    ulimits:
+      nice:
+        soft: 24
+        hard: 24
 
 networks: {}
