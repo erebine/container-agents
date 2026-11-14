@@ -49,7 +49,7 @@ REGISTRY="ghcr.io/erebine/container-agents"
 read -r -d '' CANONICAL_LICENSE <<'TXT' || true
 MIT License
 
-Copyright (c) 2026 Kevin Carter
+Copyright (c) 2026 Erebine LLC
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -72,10 +72,11 @@ SOFTWARE.
 Trademarks are not licensed under this license. See https://erebine.ai/trademark.
 Third-party components: see THIRD_PARTY_NOTICES.
 
-Erebine is MIT-licensed agents, an open API, a proprietary control plane.
-The erectl client and the EIM and EEM agents are distributed as MIT-licensed
-binaries. The Erebine platform (router, control plane, frontend) is proprietary.
-Documentation and design papers are published under CC BY 4.0.
+Erebine is MIT-licensed inference and execution runtimes, an open API, a
+proprietary control plane. The erectl client, the Erebine Inference
+Microservice (EIM) and the Erebine Execution Manager (EEM) are distributed as
+MIT-licensed binaries. The Erebine platform (router, control plane, frontend)
+is proprietary. Documentation and design papers are published under CC BY 4.0.
 TXT
 
 # The documents that govern the vendor software in the GPU images. This
