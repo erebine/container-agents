@@ -16,12 +16,15 @@ to tailor the environment to your specific needs.
 
 ## Vendor terms
 
-The GPU images contain vendor software under vendor terms. The CUDA images
-(`eim-vllm-cuda`, `eim-vllm-omni-cuda`) carry NVIDIA software; the ROCm image
-(`eim-vllm-rocm`) carries AMD's. Pulling or running those images is subject to
-the vendor's terms, and those terms restrict use, not only redistribution --
-emotion recognition, for one, is prohibited outright on the NVIDIA images. The
-CPU, ZenDNN and EEM images are built on plain Debian and carry no vendor terms.
+The GPU EIM images contain vendor software under vendor terms. The CUDA images
+(`eim-vllm-cuda`, `eim-vllm-omni-cuda`) carry NVIDIA software, the ROCm image
+(`eim-vllm-rocm`) AMD's, and the Intel GPU images (`eim-vllm-omix`,
+`eim-vllm-omni-omix`) Intel's. Pulling or running those images is subject to
+the vendor's terms, and some of them restrict use, not only redistribution --
+the NVIDIA components, for one, are licensed only for use in systems with
+NVIDIA GPUs. The CPU images (`eim-vllm-cpu`, `eim-vllm-zendnn`) contain no
+software under Intel's developer-tools license agreement; the OpenMP runtime
+they preload is LLVM's. The EEM image carries no NVIDIA, AMD or Intel software.
 
 [VENDOR_NOTICES](VENDOR_NOTICES) names the terms, links them, lists the
 restrictions you are least likely to expect, and says where each license text
@@ -36,7 +39,8 @@ the one that best suits your needs.
 This repository carries the compose files and the license notices, not the images' Dockerfiles.
 Erebine builds the images and publishes them to `ghcr.io/erebine/container-agents`; each image
 carries its license texts under `/usr/share/licenses/erebine/`, and the EIM documentation at
-https://erebine.ai/docs/eim lists every image and the compose file that runs it.
+https://erebine.ai/docs/eim lists every image and, for each image a file here runs, that compose
+file.
 
 Before running the compose files, make sure to set the `EREBINE_EIM_JOIN_KEY` environment
 variable with your join key. This key is required for the agent to connect to the Erebine

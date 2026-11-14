@@ -14,11 +14,12 @@
 #
 #   LICENSE       the MIT text covering the Erebine layer, the same text the
 #                 images carry at /usr/share/licenses/erebine/LICENSE.
-#   VENDOR_NOTICES the NVIDIA and AMD terms that bind anyone who runs the GPU
-#                 images. These restrict use and not only redistribution --
-#                 emotion recognition is prohibited outright on the NVIDIA
-#                 images -- so a reader who follows a compose file without
-#                 seeing this document can breach terms by running it.
+#   VENDOR_NOTICES the NVIDIA, AMD and Intel terms that bind anyone who runs
+#                 the EIM images. Some restrict use and not only
+#                 redistribution -- the NVIDIA components are licensed only
+#                 for use in systems with NVIDIA GPUs -- so a reader who
+#                 follows a compose file without seeing this document can
+#                 breach terms by running it.
 #   THIRD_PARTY_NOTICES, PATCHES.md
 #                 where the component notices are, and what Erebine changes.
 #
@@ -81,11 +82,15 @@ MIT-licensed binaries. The Erebine platform (router, control plane, frontend)
 is proprietary. Documentation and design papers are published under CC BY 4.0.
 TXT
 
-# The documents that govern the vendor software in the GPU images. This
-# notice summarizes them and is only safe as a summary while it links them.
+# The published documents that govern the vendor software in the GPU images.
+# This notice summarizes them and is only safe as a summary while it links
+# them.
 REQUIRED_TERMS_LINKS=(
-  "https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/"
-  "https://www.nvidia.com/en-us/agreements/enterprise-software/product-specific-terms-for-ai-products/"
+  "https://docs.nvidia.com/cuda/eula/index.html"
+  "https://docs.nvidia.com/deeplearning/cudnn/latest/reference/eula.html"
+  "https://docs.nvidia.com/cuda/cusparselt/license.html"
+  "https://docs.nvidia.com/nvshmem/api/latest/sla.html"
+  "https://docs.nvidia.com/cutlass/latest/media/docs/pythonDSL/license.html"
   "https://rocm.docs.amd.com/en/latest/about/license.html"
 )
 
@@ -155,7 +160,7 @@ check_tree() {
     local link
     for link in "${REQUIRED_TERMS_LINKS[@]}"; do
       if grep -qF -- "$link" "$root/VENDOR_NOTICES"; then
-        echo "ok   VENDOR_NOTICES: links ${link##*/agreements/}"
+        echo "ok   VENDOR_NOTICES: links $link"
       else
         echo "FAIL VENDOR_NOTICES: no longer links $link"
         failed=1
