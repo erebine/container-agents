@@ -13,6 +13,18 @@ component under its own license.
     `erebine-eim --license` and `erebine-eem --license`.
   - The base images, distribution packages and Python packages in each
     image carry their own license files inside the image.
+  - vLLM's Rust frontend, vllm-rs, in every vLLM image except
+    eim-vllm-rocm, statically links Rust crates and, through them, the
+    OpenSSL, zstd, PCRE2, Oniguruma and mimalloc libraries. Each crate's
+    license text, and where its source is published, is in the image at
+    /usr/share/licenses/erebine/vllm-rs/NOTICES.
+  - The Intel GPU images contain oneCCL and vllm-xpu-kernels built from
+    source that Erebine changed so that it builds with the open-source
+    DPC++ compiler. Each image carries each patch with a notice that the
+    component was modified: oneCCL's beside its license text in
+    /opt/oneccl/share/licenses/, and vllm-xpu-kernels' in
+    /usr/share/licenses/erebine/intel/oss/vllm-xpu-kernels/. PATCHES.md
+    lists the changes.
   - The GPU EIM images contain NVIDIA, AMD or Intel software under
     vendor terms, some of which restrict use and not only redistribution.
     VENDOR_NOTICES names those terms, links them, and says where each
