@@ -280,11 +280,11 @@ YML
         cat >"$bad/compose/compose.agent-new.yaml" <<'YML'
 services:
   agent:
-    image: ${DOCKER_REGISTRY:-ghcr.io/erebine/container-agents}/eim-vllm-gaudi:${VERSION:-latest}
+    image: ${DOCKER_REGISTRY:-ghcr.io/erebine/container-agents}/eim-vllm-example:${VERSION:-latest}
 YML
         ;;
       wrong-registry)
-        edit_in_place 's|ghcr.io/erebine/container-agents|ghcr.io/xerotier/container-agents|' \
+        edit_in_place 's|ghcr.io/erebine/container-agents|ghcr.io/example/container-agents|' \
           "$bad/compose/compose.agent-nvidia.yaml" ;;
       edited-license)
         edit_in_place 's/without restriction, including/for evaluation only, including/' \
