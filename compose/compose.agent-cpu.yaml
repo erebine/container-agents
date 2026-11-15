@@ -48,7 +48,7 @@
 #                                        only with auto thread binding (auto: 1)
 #   VLLM_CPU_KVCACHE_SPACE               KV cache memory in GB (auto: totalRAM - model - overhead)
 #   OMP_NUM_THREADS                       OpenMP threads (auto: physical core count)
-#   OMP_PROC_BIND                         Pin threads to cores (auto: TRUE)
+#   OMP_PROC_BIND                         Not set by default (it binds the engine to one CPU)
 #   OMP_WAIT_POLICY                       Thread wait strategy (auto: PASSIVE)
 #
 # KERNEL SOCKET BUFFER TUNING (optional):
