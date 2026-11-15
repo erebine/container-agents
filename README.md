@@ -61,6 +61,8 @@ Basic execution is as simple as running the following commands in your terminal:
 export EREBINE_EIM_JOIN_KEY=xxxxxxxx
 export RENDER_GID="$(getent group render | cut -d: -f3)"
 export VIDEO_GID="$(getent group video | cut -d: -f3)"
+sudo mkdir -p /data/erebine/models /data/erebine/config /data/erebine/vllm-cache
+sudo chown -R 5152:5152 /data/erebine
 sudo podman compose -f compose/compose.agent-amd-rocm.yaml down
 sudo -E podman compose -f compose/compose.agent-amd-rocm.yaml up -d
 sudo podman logs eim-vllm-rocm -f
@@ -68,6 +70,9 @@ sudo podman logs eim-vllm-rocm -f
 
 * The first three commands set the join key and the host's render and video group ids, which
   the ROCm and Intel files pass to the container by number.
+* The `mkdir` and `chown` commands create the host directories the compose file mounts, owned
+  by the user the EIM runs as (uid 5152). Each compose file's header lists the directories it
+  mounts.
 * The `down` command ensures that any existing containers are stopped and removed.
 * The `up -d` command starts the new containers in detached mode.
 * The last command allows you to view the logs of the running container in real-time.
