@@ -1,0 +1,139 @@
+# SPDX-License-Identifier: MIT
+# Erebine Inference Microservice (EIM) - AMD GPU ROCm Stack on Windows (WSL2)
+#
+# Deploys an EIM on an AMD GPU inside a WSL2 distribution. WSL2 has no amdgpu
+# driver: there is no /dev/kfd, and the /dev/dri nodes WSL2 has are not the
+# GPU. The GPU is WSL's /dev/dxg, reached through Microsoft's libdxcore.so,
+# which WSL mounts from Windows into /usr/lib/wsl/lib. The ROCm in the image
+# carries AMD's WSL bridge library, so the distribution needs no ROCm.
+# See https://erebine.ai/docs/eim/windows for details.
+#
+# QUICK START:
+#   1. Get a join key from your Erebine dashboard:
+#      Dashboard -> Infrastructure -> Agents -> Generate Join Key
+#
+#   2. Create host directories with correct permissions:
+#      sudo mkdir -p /data/erebine/models /data/erebine/config /data/erebine/vllm-cache
+#      sudo chown -R 5152:5152 /data/erebine
+#
+#   3. Set environment variables or create a .env file:
+#      export EREBINE_EIM_JOIN_KEY=ejk_your_key_here
+#
+#   4. Start the EIM:
+#      sudo -E podman compose -f compose.agent-amd-rocm-wsl.yaml up -d
+#
+# PREREQUISITES:
+#   - Windows 11 with an AMD Radeon or Ryzen GPU and the current
+#     AMD Software: Adrenalin Edition driver
+#   - A WSL2 distribution with GPU support: /dev/dxg and
+#     /usr/lib/wsl/lib/libdxcore.so present (run wsl --update on Windows)
+#   - One GPU: AMD does not support more than one GPU under WSL2
+#
+# WSL2 DIFFERENCES FROM THE NATIVE AMD STACK:
+#   - devices: /dev/dxg only. No /dev/kfd, /dev/dri or /dev/mem, and no
+#     group_add: /dev/dxg is readable and writable by every user.
+#   - Unprivileged: no privileged, seccomp=unconfined or added capabilities.
+#   - libdxcore.so is mounted read-only into /usr/lib64, where the image's
+#     loader finds it; mounting /usr/lib/wsl alone is not enough.
+#   - PYTORCH_ALLOC_CONF=expandable_segments:False: PyTorch's expandable
+#     segments use HIP virtual memory, which fails over /dev/dxg (every first
+#     GPU allocation fails with "CUDA error: invalid argument").
+#   - The Windows desktop shares the GPU's memory, and the EIM's RAM, CPUs and
+#     /dev/shm are the WSL VM's (memory= and processors= under [wsl2] in
+#     %UserProfile%\.wslconfig on Windows).
+#   - The EIM runs while the WSL distribution runs. WSL stops an idle
+#     distribution after instanceIdleTimeout (15 s by default); set
+#     instanceIdleTimeout=-1 under [general] in %UserProfile%\.wslconfig to
+#     keep it running.
+#
+# ENROLLMENT WORKFLOW:
+#   - On first start, the EIM enrolls using your join key
+#   - Enrollment state is persisted to /data/erebine/config
+#   - On subsequent restarts, the EIM reconnects automatically
+#   - You can remove EREBINE_EIM_JOIN_KEY after successful enrollment
+#
+# ENVIRONMENT VARIABLES:
+#   EREBINE_EIM_JOIN_KEY                [REQUIRED] Join key from Erebine dashboard (first run only)
+#   EREBINE_EIM_MAX_CONCURRENT          Optional ceiling for concurrent requests (auto-configured when not set)
+#   EREBINE_EIM_OVERPROVISION_FACTOR    Safe-to-admit slot factor, at least 1.0 (default: 1.5)
+#   EREBINE_EIM_GPU_MEMORY_UTILIZATION GPU memory utilization fraction (default: 0.90; under WSL2
+#                                        the EIM lowers it to fit the memory the Windows desktop
+#                                        leaves free, at most 0.85)
+#   EREBINE_EIM_MAX_MODEL_LEN           Maximum sequence length (default: model default)
+#   EREBINE_EIM_MODEL_CACHE_MAX_SIZE_GB Local model cache size in GB (default: 100)
+#   EREBINE_EIM_LOG_LEVEL               Logging level: trace, debug, info, warning, error (default: info)
+#   SHM_SIZE                             Shared memory size (default: 90g)
+#
+# KERNEL SOCKET BUFFER TUNING (optional):
+#   The EIM sets ZeroMQ socket buffers to 4 MiB for streaming throughput.
+#   Linux defaults net.core.wmem_max and net.core.rmem_max to 212992 bytes,
+#   which silently caps the requested buffer size. This container is not
+#   privileged, so the EIM cannot raise them itself. Set them in the WSL
+#   distribution before starting:
+#     sudo sysctl -w net.core.wmem_max=4194304
+#     sudo sysctl -w net.core.rmem_max=4194304
+#
+#   To persist across restarts of the distribution (with systemd on), add to
+#   /etc/sysctl.d/99-erebine.conf:
+#     net.core.wmem_max = 4194304
+#     net.core.rmem_max = 4194304
+
+services:
+  agent:
+    image: ${DOCKER_REGISTRY:-ghcr.io/erebine/container-agents}/eim-vllm-rocm:${VERSION:-latest}
+    container_name: eim-vllm-rocm
+    network_mode: host
+    ipc: host
+    shm_size: ${SHM_SIZE:-90g}
+    # Podman defaults a container to 2048 pids and counts threads; vLLM needs more.
+    # NCCL over InfiniBand or RoCE registers memory against memlock: no limit either.
+    # libdispatch starts its worker threads at nice -2; uid 5152 holds no capabilities,
+    # so it needs this raw RLIMIT_NICE (24 allows nice -4).
+    pids_limit: -1
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nice:
+        soft: 24
+        hard: 24
+    devices:
+      # WSL2's GPU device: the only GPU node a WSL2 distribution has.
+      - /dev/dxg:/dev/dxg
+    volumes:
+      # Persistent model cache
+      - /data/erebine/models:/var/lib/inference/.cache/erebine/models
+      # Persistent vLLM compile/JIT cache (VLLM_CACHE_ROOT) -- avoids repaying warmup on restart
+      - /data/erebine/vllm-cache:/var/lib/inference/.cache/erebine/vllm
+      # Persistent enrollment state
+      - /data/erebine/config:/var/lib/inference/.config/erebine
+      # Microsoft's DXCore library, which WSL mounts from Windows. ROCm's WSL
+      # bridge loads it by name; /usr/lib64 is on the image's loader path.
+      - /usr/lib/wsl/lib/libdxcore.so:/usr/lib64/libdxcore.so:ro
+    environment:
+      # Each operator setting is passed under its EREBINE_EIM_* name and
+      # under its pre-2.10 EREBINE_AGENT_* name, so a .env written for an
+      # older release keeps working: the EIM reads the old name only when
+      # the new one is empty, and warns once at startup.
+      # EIM enrollment [REQUIRED for first run]
+      EREBINE_EIM_JOIN_KEY: "${EREBINE_EIM_JOIN_KEY:-}"
+      EREBINE_AGENT_JOIN_KEY: "${EREBINE_AGENT_JOIN_KEY:-}"
+      # PyTorch's expandable segments use HIP virtual memory, which fails over
+      # /dev/dxg; the image turns them on, so this turns them off. The EIM
+      # turns them off for its engine under WSL2 as well.
+      PYTORCH_ALLOC_CONF: "expandable_segments:False"
+      # Model is assigned from the dashboard during enrollment
+      EREBINE_EIM_MAX_MODEL_LEN: "${EREBINE_EIM_MAX_MODEL_LEN:-}"
+      EREBINE_AGENT_MAX_MODEL_LEN: "${EREBINE_AGENT_MAX_MODEL_LEN:-}"
+      EREBINE_EIM_GPU_MEMORY_UTILIZATION: "${EREBINE_EIM_GPU_MEMORY_UTILIZATION:-}"
+      EREBINE_AGENT_GPU_MEMORY_UTILIZATION: "${EREBINE_AGENT_GPU_MEMORY_UTILIZATION:-}"
+      # This file's default. The image entrypoint applies it only when
+      # neither name above holds a value, so an old .env value still wins.
+      EREBINE_DEFAULT_EIM_GPU_MEMORY_UTILIZATION: "0.90"
+      EREBINE_EIM_MAX_CONCURRENT: "${EREBINE_EIM_MAX_CONCURRENT:-}"
+      EREBINE_AGENT_MAX_CONCURRENT: "${EREBINE_AGENT_MAX_CONCURRENT:-}"
+      EREBINE_EIM_OVERPROVISION_FACTOR: "${EREBINE_EIM_OVERPROVISION_FACTOR:-}"
+      EREBINE_AGENT_OVERPROVISION_FACTOR: "${EREBINE_AGENT_OVERPROVISION_FACTOR:-}"
+      EREBINE_EIM_LOG_LEVEL: "${EREBINE_EIM_LOG_LEVEL:-}"
+      EREBINE_AGENT_LOG_LEVEL: "${EREBINE_AGENT_LOG_LEVEL:-}"
+    restart: unless-stopped

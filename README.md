@@ -77,6 +77,20 @@ sudo podman logs eim-vllm-rocm -f
 * The `up -d` command starts the new containers in detached mode.
 * The last command allows you to view the logs of the running container in real-time.
 
+### AMD GPU on Windows (WSL2)
+
+WSL2 has no amdgpu driver: the GPU is WSL's `/dev/dxg`. Inside a WSL2
+distribution, run the AMD stack from `compose/compose.agent-amd-rocm-wsl.yaml`
+instead of `compose/compose.agent-amd-rocm.yaml`: it gives the container
+`/dev/dxg` and `/usr/lib/wsl/lib/libdxcore.so`, runs unprivileged and turns
+PyTorch's expandable segments off. An NVIDIA GPU uses
+`compose/compose.agent-nvidia.yaml` unchanged. See
+https://erebine.ai/docs/eim/windows.
+
+```bash
+sudo -E podman compose -f compose/compose.agent-amd-rocm-wsl.yaml up -d
+```
+
 ### Optional system configuration
 
 While optional, these settings can help improve performance when running AI workloads in containers.
