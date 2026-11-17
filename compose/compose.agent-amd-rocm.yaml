@@ -26,6 +26,10 @@
 #   - /dev/kfd and /dev/dri devices available
 #   - User in video and render groups on the host
 #
+# WINDOWS (WSL2):
+#   WSL2 has no amdgpu driver, no /dev/kfd and no render node of the GPU,
+#   so this file does not run there. Use compose.agent-amd-rocm-wsl.yaml.
+#
 # ENROLLMENT WORKFLOW:
 #   - On first start, the EIM enrolls using your join key
 #   - Enrollment state is persisted to /data/erebine/config
