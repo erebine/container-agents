@@ -6,18 +6,20 @@
 #
 # Why this exists
 # ---------------
-# No image is built here. The Dockerfiles, the OCI license labels and the
-# license files inside the images all live in Erebine/platform. What this
-# repository ships is the instruction to pull and run those images, and three
+# No image is built here. Erebine builds the images, with their OCI license
+# labels and the license files inside them, and publishes them to
+# ghcr.io/erebine/container-agents. What this repository ships is the
+# instruction to pull and run those images, and three
 # documents that say what running them means:
 #
-#   LICENSE       the MIT text covering the Erebine layer, a copy of the
-#                 platform's Resources/licensing/erebine-binaries-MIT.txt.
-#   VENDOR_NOTICES the NVIDIA and AMD terms that bind anyone who runs the GPU
-#                 images. These restrict use and not only redistribution --
-#                 emotion recognition is prohibited outright on the NVIDIA
-#                 images -- so a reader who follows a compose file without
-#                 seeing this document can breach terms by running it.
+#   LICENSE       the MIT text covering the Erebine layer, the same text the
+#                 images carry at /usr/share/licenses/erebine/LICENSE.
+#   VENDOR_NOTICES the NVIDIA, AMD and Intel terms that bind anyone who runs
+#                 the EIM images. Some restrict use and not only
+#                 redistribution -- the NVIDIA components are licensed only
+#                 for use in systems with NVIDIA GPUs -- so a reader who
+#                 follows a compose file without seeing this document can
+#                 breach terms by running it.
 #   THIRD_PARTY_NOTICES, PATCHES.md
 #                 where the component notices are, and what Erebine changes.
 #
@@ -44,12 +46,13 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # anywhere else is not one whose terms these notices describe.
 REGISTRY="ghcr.io/erebine/container-agents"
 
-# Erebine/platform Resources/licensing/erebine-binaries-MIT.txt, byte for
-# byte. LICENSE is a copy of that file, so the comparison is exact.
+# The Erebine MIT text, byte for byte as the images carry it at
+# /usr/share/licenses/erebine/LICENSE. LICENSE is a copy, so the comparison
+# is exact.
 read -r -d '' CANONICAL_LICENSE <<'TXT' || true
 MIT License
 
-Copyright (c) 2026 Kevin Carter
+Copyright (c) 2026 Erebine LLC
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -72,17 +75,22 @@ SOFTWARE.
 Trademarks are not licensed under this license. See https://erebine.ai/trademark.
 Third-party components: see THIRD_PARTY_NOTICES.
 
-Erebine is MIT-licensed agents, an open API, a proprietary control plane.
-The erectl client and the EIM and EEM agents are distributed as MIT-licensed
-binaries. The Erebine platform (router, control plane, frontend) is proprietary.
-Documentation and design papers are published under CC BY 4.0.
+Erebine is MIT-licensed inference and execution runtimes, an open API, a
+proprietary control plane. The erectl client, the Erebine Inference
+Microservice (EIM) and the Erebine Execution Manager (EEM) are distributed as
+MIT-licensed binaries. The Erebine platform (router, control plane, frontend)
+is proprietary. Documentation and design papers are published under CC BY 4.0.
 TXT
 
-# The documents that govern the vendor software in the GPU images. This
-# notice summarizes them and is only safe as a summary while it links them.
+# The published documents that govern the vendor software in the GPU images.
+# This notice summarizes them and is only safe as a summary while it links
+# them.
 REQUIRED_TERMS_LINKS=(
-  "https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/"
-  "https://www.nvidia.com/en-us/agreements/enterprise-software/product-specific-terms-for-ai-products/"
+  "https://docs.nvidia.com/cuda/eula/index.html"
+  "https://docs.nvidia.com/deeplearning/cudnn/latest/reference/eula.html"
+  "https://docs.nvidia.com/cuda/cusparselt/license.html"
+  "https://docs.nvidia.com/nvshmem/api/latest/sla.html"
+  "https://docs.nvidia.com/cutlass/latest/media/docs/pythonDSL/license.html"
   "https://rocm.docs.amd.com/en/latest/about/license.html"
 )
 
@@ -152,7 +160,7 @@ check_tree() {
     local link
     for link in "${REQUIRED_TERMS_LINKS[@]}"; do
       if grep -qF -- "$link" "$root/VENDOR_NOTICES"; then
-        echo "ok   VENDOR_NOTICES: links ${link##*/agreements/}"
+        echo "ok   VENDOR_NOTICES: links $link"
       else
         echo "FAIL VENDOR_NOTICES: no longer links $link"
         failed=1
@@ -216,6 +224,12 @@ check_tree() {
   return "$failed"
 }
 
+# Applies one sed expression to FILE in place. GNU and BSD sed spell -i
+# differently, so the edit goes through a temporary file instead.
+edit_in_place() {
+  sed "$1" "$2" >"$2.tmp" && mv "$2.tmp" "$2"
+}
+
 # Builds fixture trees and proves the check fails on an image no notice
 # covers, an image from the wrong registry, an edited license text, a lost
 # vendor terms link, a README that stops pointing at the notice, a missing
@@ -266,17 +280,17 @@ YML
         cat >"$bad/compose/compose.agent-new.yaml" <<'YML'
 services:
   agent:
-    image: ${DOCKER_REGISTRY:-ghcr.io/erebine/container-agents}/eim-vllm-gaudi:${VERSION:-latest}
+    image: ${DOCKER_REGISTRY:-ghcr.io/erebine/container-agents}/eim-vllm-example:${VERSION:-latest}
 YML
         ;;
       wrong-registry)
-        sed -i 's|ghcr.io/erebine/container-agents|ghcr.io/xerotier/container-agents|' \
+        edit_in_place 's|ghcr.io/erebine/container-agents|ghcr.io/example/container-agents|' \
           "$bad/compose/compose.agent-nvidia.yaml" ;;
       edited-license)
-        sed -i 's/without restriction, including/for evaluation only, including/' \
+        edit_in_place 's/without restriction, including/for evaluation only, including/' \
           "$bad/LICENSE" ;;
       lost-terms-link)
-        sed -i '\|rocm.docs.amd.com|d' "$bad/VENDOR_NOTICES" ;;
+        edit_in_place '\|rocm.docs.amd.com|d' "$bad/VENDOR_NOTICES" ;;
       readme-drops-notice)
         printf 'Getting started.\n' >"$bad/README.md" ;;
       missing-vendor-notices)

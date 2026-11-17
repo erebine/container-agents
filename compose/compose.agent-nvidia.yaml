@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: MIT
-# Erebine Agent - NVIDIA GPU Stack
+# Erebine Inference Microservice (EIM) - NVIDIA GPU Stack
 #
-# Deploys a EIM GPU node with vLLM native CPU KV cache offloading.
-# See internal-docs/configuration/kv-offloading.md for details.
+# Deploys an EIM GPU node with vLLM native CPU KV cache offloading.
+# See https://erebine.ai/docs/eim#kv-offload for details.
 #
 # QUICK START:
 #   1. Get a join key from your Erebine dashboard:
@@ -13,31 +13,30 @@
 #      sudo chown -R 5152:5152 /data/erebine
 #
 #   3. Set environment variables or create a .env file:
-#      export EREBINE_AGENT_JOIN_KEY=ejk_your_key_here
+#      export EREBINE_EIM_JOIN_KEY=ejk_your_key_here
 #
-#   4. Start the agent:
-#      sudo -E podman compose -f compose.agent-nvidia.yaml up -d
+#   4. Start the EIM:
+#      sudo -E podman compose -f compose/compose.agent-nvidia.yaml up -d
 #
 # ENROLLMENT WORKFLOW:
-#   - On first start, the agent enrolls using your join key
+#   - On first start, the EIM enrolls using your join key
 #   - Enrollment state is persisted to /data/erebine/config
-#   - On subsequent restarts, the agent reconnects automatically
-#   - You can remove EREBINE_AGENT_JOIN_KEY after successful enrollment
+#   - On subsequent restarts, the EIM reconnects automatically
+#   - You can remove EREBINE_EIM_JOIN_KEY after successful enrollment
 #
 # ENVIRONMENT VARIABLES:
-#   EREBINE_AGENT_JOIN_KEY                         [REQUIRED] Join key from Erebine dashboard (first run only)
-#   EREBINE_AGENT_MAX_CONCURRENT                   Optional ceiling for concurrent requests (auto-configured when not set)
-#   EREBINE_AGENT_OVERPROVISION_FACTOR             Safe-to-admit slot factor, at least 1.0 (default: 1.5)
-#   EREBINE_AGENT_TENSOR_PARALLEL_SIZE             Tensor parallel size for multi-GPU (default: 1)
-#   EREBINE_AGENT_GPU_MEMORY_UTILIZATION           GPU memory utilization fraction (default: agent-managed, 0.95)
-#   EREBINE_AGENT_MAX_MODEL_LEN                    Maximum sequence length (default: model default)
-#   EREBINE_AGENT_MODEL_CACHE_MAX_SIZE_GB          Local model cache size in GB (default: 100)
-#   EREBINE_AGENT_LOG_LEVEL                        Logging level: trace, debug, info, warning, error (default: info)
-#   EREBINE_AGENT_VLLM_DISABLE_CUSTOM_ALL_REDUCE   Force disable custom all-reduce (default: "false"; A30/A40/L40 are handled automatically)
-#   EREBINE_AGENT_MAX_MODEL_LEN                    Maximum sequence length (default: model default)
+#   EREBINE_EIM_JOIN_KEY                           [REQUIRED] Join key from Erebine dashboard (first run only)
+#   EREBINE_EIM_MAX_CONCURRENT                     Optional ceiling for concurrent requests (auto-configured when not set)
+#   EREBINE_EIM_OVERPROVISION_FACTOR               Safe-to-admit slot factor, at least 1.0 (default: 1.5)
+#   EREBINE_EIM_TENSOR_PARALLEL_SIZE               Tensor parallel size for multi-GPU (default: 1)
+#   EREBINE_EIM_GPU_MEMORY_UTILIZATION             GPU memory utilization fraction (default: EIM-managed, 0.95)
+#   EREBINE_EIM_MAX_MODEL_LEN                      Maximum sequence length (default: model default)
+#   EREBINE_EIM_MODEL_CACHE_MAX_SIZE_GB            Local model cache size in GB (default: 100)
+#   EREBINE_EIM_LOG_LEVEL                          Logging level: trace, debug, info, warning, error (default: info)
+#   EREBINE_EIM_VLLM_DISABLE_CUSTOM_ALL_REDUCE     Force disable custom all-reduce (default: "false"; A30/A40/L40 are handled automatically)
 #   SHM_SIZE                                        Shared memory size (default: 90g)
-#   EREBINE_AGENT_CUDA_TOOLKIT_DIR                 Host CUDA toolkit root (see CUDA COMPILER SUPPLY below)
-#   EREBINE_AGENT_CUDA_FETCH_COMPILER              Fetch the CUDA compiler from NVIDIA on start (default: 0)
+#   EREBINE_EIM_CUDA_TOOLKIT_DIR                   Host CUDA toolkit root (see CUDA COMPILER SUPPLY below)
+#   EREBINE_EIM_CUDA_FETCH_COMPILER                Fetch the CUDA compiler from NVIDIA on start (default: 0)
 #
 # CUDA COMPILER SUPPLY (NVIDIA images only):
 #   This image ships no ptxas and no nvcc. NVIDIA's CUDA Toolkit EULA does not
@@ -51,7 +50,7 @@
 #     1. MOUNTED. A CUDA toolkit already on the host, bind-mounted read-only.
 #        Nothing is downloaded. Found automatically at /usr/local/cuda,
 #        /usr/local/cuda-*, or /opt/cuda; name another location with
-#        EREBINE_AGENT_CUDA_TOOLKIT_DIR. Add to this service:
+#        EREBINE_EIM_CUDA_TOOLKIT_DIR. Add to this service:
 #            volumes:
 #              - /usr/local/cuda:/usr/local/cuda:ro
 #
@@ -60,17 +59,17 @@
 #        default: a container that reaches the internet on boot should be
 #        asked to, not assume it. Add to this service:
 #            environment:
-#              EREBINE_AGENT_CUDA_FETCH_COMPILER: "1"
+#              EREBINE_EIM_CUDA_FETCH_COMPILER: "1"
 #
-#   With neither, the agent still starts and still serves -- it warns once and
-#   names both routes. `erectl deploy agent eim` performs route 1 for you
+#   With neither, the EIM still starts and still serves -- it warns once and
+#   names both routes. `erectl deploy eim` performs route 1 for you
 #   when the host has a toolkit, which is why an erectl-managed host needs
 #   nothing here.
 #
 # KERNEL SOCKET BUFFER TUNING (optional):
-#   The agent sets ZeroMQ socket buffers to 4 MiB for streaming throughput.
+#   The EIM sets ZeroMQ socket buffers to 4 MiB for streaming throughput.
 #   Linux defaults net.core.wmem_max and net.core.rmem_max to 212992 bytes,
-#   which silently caps the requested buffer size. The agent will attempt to
+#   which silently caps the requested buffer size. The EIM will attempt to
 #   raise these limits on startup, which works only for a privileged
 #   container on the HOST network (/proc/sys is read-only in every
 #   unprivileged container, and the knobs do not exist in a bridge
@@ -93,13 +92,17 @@ services:
     privileged: true
     shm_size: ${SHM_SIZE:-90g}
     # Podman defaults a container to 2048 pids and counts threads; vLLM needs more.
+    # NCCL over InfiniBand or RoCE registers memory against memlock: no limit either.
+    # libdispatch starts its worker threads at nice -2; uid 5152 holds no capabilities,
+    # so it needs this raw RLIMIT_NICE (24 allows nice -4).
     pids_limit: -1
-    # No locked-memory limit, as erectl sets on every agent: NCCL over
-    # InfiniBand or RoCE registers memory against it.
     ulimits:
       memlock:
         soft: -1
         hard: -1
+      nice:
+        soft: 24
+        hard: 24
     # For Docker Compose v2.3+ with NVIDIA Container Toolkit, use the following deploy section to request GPUs
     deploy:
       resources:
@@ -114,19 +117,28 @@ services:
       - /data/erebine/vllm-cache:/var/lib/inference/.cache/erebine/vllm
       # Persistent enrollment state
       - /data/erebine/config:/var/lib/inference/.config/erebine
-      # LMCache disk tier (EREBINE_AGENT_KV_CACHE_BACKEND=lmcache). Mount a
+      # LMCache disk tier (EREBINE_EIM_KV_CACHE_BACKEND=lmcache). Mount a
       # dedicated disk here so the cache never competes with the model store;
       # the node sizes the tier from the volume at each launch.
       # - /data/erebine/lmcache:/var/lib/inference/.cache/erebine/lmcache
     environment:
-      # Agent Enrollment [REQUIRED for first run]
+      # Each operator setting is passed under its EREBINE_EIM_* name and
+      # under its pre-2.10 EREBINE_AGENT_* name, so a .env written for an
+      # older release keeps working: the EIM reads the old name only when
+      # the new one is empty, and warns once at startup.
+      # EIM enrollment [REQUIRED for first run]
+      EREBINE_EIM_JOIN_KEY: "${EREBINE_EIM_JOIN_KEY:-}"
       EREBINE_AGENT_JOIN_KEY: "${EREBINE_AGENT_JOIN_KEY:-}"
-      # KV cache backend: native (default) | lmcache | none. See /docs/eim/advanced#lmcache
-      EREBINE_AGENT_KV_CACHE_BACKEND: "${EREBINE_AGENT_KV_CACHE_BACKEND:-native}"
+      # KV cache backend: native (default) | lmcache | none. See https://erebine.ai/docs/eim/advanced#lmcache
+      EREBINE_EIM_KV_CACHE_BACKEND: "${EREBINE_EIM_KV_CACHE_BACKEND:-}"
+      EREBINE_AGENT_KV_CACHE_BACKEND: "${EREBINE_AGENT_KV_CACHE_BACKEND:-}"
       # Optional explicit LMCache disk tier capacity in GiB; unset = derived from the volume
+      EREBINE_EIM_LMCACHE_DISK_SIZE_GB: "${EREBINE_EIM_LMCACHE_DISK_SIZE_GB:-}"
       EREBINE_AGENT_LMCACHE_DISK_SIZE_GB: "${EREBINE_AGENT_LMCACHE_DISK_SIZE_GB:-}"
       # Model is assigned from the dashboard during enrollment
-      EREBINE_AGENT_LOG_LEVEL: "${EREBINE_AGENT_LOG_LEVEL:-info}"
+      EREBINE_EIM_LOG_LEVEL: "${EREBINE_EIM_LOG_LEVEL:-}"
+      EREBINE_AGENT_LOG_LEVEL: "${EREBINE_AGENT_LOG_LEVEL:-}"
       # Off by default: the node disables custom all-reduce itself on A30/A40/L40, and after a CUDA-graph fault.
-      EREBINE_AGENT_VLLM_DISABLE_CUSTOM_ALL_REDUCE: "${EREBINE_AGENT_VLLM_DISABLE_CUSTOM_ALL_REDUCE:-false}"
+      EREBINE_EIM_VLLM_DISABLE_CUSTOM_ALL_REDUCE: "${EREBINE_EIM_VLLM_DISABLE_CUSTOM_ALL_REDUCE:-}"
+      EREBINE_AGENT_VLLM_DISABLE_CUSTOM_ALL_REDUCE: "${EREBINE_AGENT_VLLM_DISABLE_CUSTOM_ALL_REDUCE:-}"
     restart: unless-stopped

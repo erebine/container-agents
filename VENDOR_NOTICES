@@ -1,62 +1,144 @@
 VENDOR NOTICES
 
-The GPU agent images are built on vendor base images and contain vendor
-software. That software is not covered by the MIT License on the Erebine
-layer. It is licensed by its vendor, on the vendor's terms, and those
-terms restrict use and not only redistribution. Pulling or running one
-of these images is subject to them.
+The GPU EIM images contain vendor software. That software is not
+covered by the MIT License on the Erebine layer. It is licensed by its
+vendor, on the vendor's terms, and some of those terms restrict use and
+not only redistribution. Pulling or running one of these images is
+subject to them. https://erebine.ai/docs/license#container-images
+describes the images, their base and the vendor software in them, for
+the current release.
 
-  eim-vllm-cuda        NVIDIA. Built on nvcr.io/nvidia/cuda-dl-base.
-                       Contains the CUDA toolkit and runtime, cuDNN,
-                       NCCL, NVSHMEM and the TensorRT runtime libraries.
-  eim-vllm-omni-cuda   NVIDIA. Built on eim-vllm-cuda, so everything
-                       said here about that image applies to it.
-  eim-vllm-rocm        AMD. Built on rocm/dev-ubuntu-24.04. Contains
-                       the ROCm stack.
+  eim-vllm-cuda        NVIDIA. Contains, as Python packages, the CUDA
+                       runtime and other CUDA Toolkit libraries,
+                       cuDNN, cuSPARSELt, NCCL, NVSHMEM, NVTX and the
+                       CUTLASS DSLs.
+  eim-vllm-omni-cuda   NVIDIA. The eim-vllm-cuda image with vLLM-Omni
+                       added, so everything said here about that image
+                       applies to it.
+  eim-vllm-rocm        AMD. Contains the ROCm components, as Python
+                       packages, and the open-source system libraries
+                       the ROCm runtime bundles, several of them under
+                       the GNU LGPL.
+  eim-vllm-omix        Intel. Contains Intel's GPU driver packages (the
+                       Level Zero loader, the compute runtime, the
+                       graphics compiler and the GPU management tools)
+                       under the MIT, BSD and Apache-2.0 licenses their
+                       packages declare; the SYCL runtime from Intel's
+                       open-source DPC++ release, under Apache-2.0 with
+                       the LLVM exception; oneCCL (Apache-2.0), PTI
+                       (MIT) and vllm-xpu-kernels (Apache-2.0), built
+                       from source, with Erebine's changes to oneCCL and
+                       to the vllm-xpu-kernels build files in the image
+                       as patches; and the oneAPI Math Kernel Library,
+                       Threading Building Blocks and tcmlib, unmodified,
+                       as Python packages under the Intel Simplified
+                       Software License. It contains no software under
+                       Intel's End User License Agreement for Developer
+                       Tools. Its inventory of Intel components, with
+                       the path of each one's license text, is in the
+                       image at
+                       /usr/share/licenses/erebine/intel/INVENTORY.tsv.
+  eim-vllm-omni-omix   Intel. The eim-vllm-omix image with vLLM-Omni
+                       added; it adds no Intel component.
 
-The eim-vllm-cpu, eim-vllm-zendnn and eem images are built on
-debian:trixie-slim, not on a vendor base image. No vendor license
-agreement applies to them; their components carry their own licenses.
+The CPU images, eim-vllm-cpu and eim-vllm-zendnn, preload LLVM's OpenMP
+runtime, libomp.so, taken unmodified from Red Hat UBI 10's libomp
+package and licensed, as that package declares, under Apache-2.0 WITH
+LLVM-exception OR NCSA. Its text is in the image at
+/usr/share/licenses/erebine/libomp/. The images preload it through
+/usr/local/lib64/libiomp5.so, a symbolic link to
+/usr/local/lib64/libomp.so, because that is the name vLLM looks for: the
+file is LLVM's runtime, not Intel's libiomp5. Neither image contains
+software under Intel's End User License Agreement for Developer Tools,
+and the build of each fails if it does. eim-vllm-zendnn also contains
+AMD's zentorch plugin, under the Apache License 2.0, with the AMD ZenDNN
+and AOCL-BLIS binaries it bundles under the same terms; it contains no
+AOCC component. The other components of both images, torch and vLLM
+among them, carry their own licenses.
+
+The eem image contains no NVIDIA, AMD or Intel software; its components
+carry their own licenses.
+
+No compose file here runs the speech or Laya images, and this notice
+does not describe them; see the license page above.
 
 
 THE TERMS
 
-  NVIDIA Software License Agreement
-  https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/
+NVIDIA, in eim-vllm-cuda and eim-vllm-omni-cuda:
 
-  Product-Specific Terms for NVIDIA AI Products
-  https://www.nvidia.com/en-us/agreements/enterprise-software/product-specific-terms-for-ai-products/
+  CUDA Toolkit End User License Agreement, for the CUDA runtime and the
+  other CUDA Toolkit libraries
+  https://docs.nvidia.com/cuda/eula/index.html
+
+  License Agreement for NVIDIA Software Development Kits, with the
+  supplement for each component it governs:
+    cuDNN       https://docs.nvidia.com/deeplearning/cudnn/latest/reference/eula.html
+    cuSPARSELt  https://docs.nvidia.com/cuda/cusparselt/license.html
+    NVSHMEM     https://docs.nvidia.com/nvshmem/api/latest/sla.html
+
+  NVIDIA Software License Agreement for the CUTLASS DSLs
+  https://docs.nvidia.com/cutlass/latest/media/docs/pythonDSL/license.html
+
+  NCCL is under the BSD-3-Clause license and NVTX under the Apache
+  License 2.0.
+
+AMD, in eim-vllm-rocm:
 
   AMD ROCm licensing, per component
   https://rocm.docs.amd.com/en/latest/about/license.html
 
-These documents govern. Read them. This notice points at them and
-summarizes the restrictions a reader is least likely to expect; it does
-not replace them, and NVIDIA and AMD may change them.
+Intel, in eim-vllm-omix and eim-vllm-omni-omix:
+
+  Intel Simplified Software License, for oneMKL, TBB and tcmlib. Its
+  text is in the image under /usr/share/licenses/erebine/intel/, where
+  INVENTORY.tsv names each copy.
+
+These documents govern. Read them. The copy inside an image is the text
+that shipped with the component, and the page at each link can be a
+later revision. This notice points at them and summarizes the
+restrictions a reader is least likely to expect; it does not replace
+them, and NVIDIA, AMD and Intel may change them.
 
 
 WHAT THE NVIDIA TERMS RESTRICT
 
-  - Emotion recognition is prohibited outright, for the software and
-    every component of it. These images run vision, video, audio and
-    realtime voice workloads. None of it may be pointed at this.
-  - You may not use the software to develop competing products or
-    technologies, or to help a third party do so, and you may not use
-    it to identify or support an intellectual property claim against
-    NVIDIA.
-  - You may not replace an NVIDIA component with other software that
-    implements NVIDIA's interfaces. The CUDA toolkit, the SDKs and the
-    drivers are licensed to run only on NVIDIA platforms, so a
-    translation layer over other hardware is out on both counts.
-  - You may not reverse engineer, decompile or disassemble the NVIDIA
-    binaries, nor any part of the output an NVIDIA SDK generates.
+  - Only on NVIDIA GPUs. The CUDA Toolkit, SDK and CUTLASS DSL
+    agreements each license their component for applications "only for
+    use in systems with NVIDIA GPUs".
+  - No reverse engineering, decompiling or disassembling the components
+    those agreements govern, and no removing their copyright or other
+    proprietary notices.
+  - No reverse engineering, decompiling or disassembling output
+    generated with the software to translate it to a non-NVIDIA
+    platform. The CUTLASS DSL agreement says so, and so does the
+    current published CUDA Toolkit End User License Agreement; the copy
+    of that agreement in an image can be an earlier revision without
+    the clause.
+  - In eim-vllm-cuda and eim-vllm-omni-cuda, the CUTLASS DSL agreement
+    also prohibits replacing an NVIDIA component it governs with other
+    software that implements NVIDIA APIs.
+  - Without an agreement with NVIDIA for that purpose, the cuSPARSELt
+    and NVSHMEM agreements prohibit use with any system or application
+    whose use or failure can reasonably be expected to threaten or
+    result in personal injury, death, or catastrophic loss, such as
+    avionics, navigation, military, medical or life support. The
+    current published CUDA Toolkit End User License Agreement and cuDNN
+    agreement instead say NVIDIA has not tested or certified the
+    software for those uses; an earlier revision of the CUDA Toolkit
+    agreement, which an image can carry, prohibits them.
+  - Starting or joining a legal proceeding against NVIDIA over the
+    software can end the license: the CUDA Toolkit and SDK agreements
+    let NVIDIA terminate them for it, and the CUTLASS DSL agreement
+    ends automatically.
 
-Benchmarks are allowed. NVIDIA's container benchmarking exemption names
-the cuda-dl-base image these are built on, so benchmarking, regression
-and performance results for the CUDA images may be published without
-asking NVIDIA first. The exemption does not extend to competitive
-analysis: a comparison against a non-NVIDIA platform still needs
-NVIDIA's written permission.
+None of the NVIDIA agreements above has a term on publishing benchmark,
+regression or performance results, or competitive analysis. Read no
+permission into that silence: read the agreements before you publish.
+
+Emotion recognition is not an NVIDIA term. The Erebine Acceptable Use
+Policy, https://erebine.ai/acceptable-use, prohibits it on every
+endpoint and every EIM image.
 
 Erebine is not sponsored by, endorsed by, or affiliated with NVIDIA
 Corporation.
@@ -68,36 +150,74 @@ AMD licenses ROCm per component, under MIT, Apache-2.0, NCSA and BSD
 licenses. What those ask of you is notice rather than restraint: keep
 the copyright and license text with any copy you pass on. Two ROCm
 packages, ROCprof Trace Decoder and the AOCC CPU optimizations, ship in
-binary form under a separate AMD license agreement instead; using,
-copying or distributing either one accepts that agreement.
+binary form under a separate AMD license agreement instead; neither is
+in the image.
+
+The ROCm runtime also bundles its own builds of open-source system
+libraries, among them libdrm, elfutils, numactl, libnl, gmp and mpfr,
+several under the GNU LGPL. Their license texts are in the image at
+/usr/share/licenses/erebine/rocm-sysdeps/, and the image's routing file
+names the published source for each.
 
 Erebine is not sponsored by, endorsed by, or affiliated with Advanced
 Micro Devices, Inc.
 
 
+WHAT THE INTEL TERMS RESTRICT
+
+The Intel Simplified Software License covers oneMKL, TBB and tcmlib in
+the Intel GPU images. It permits use and redistribution without
+modification, provided the copyright notice and the license terms go
+with every copy. It does not permit reverse engineering, decompiling or
+disassembling the software, nor modifying it or its operation,
+including during execution, and it grants no right to use Intel's name
+to endorse or promote a product.
+
+Erebine is not sponsored by, endorsed by, or affiliated with Intel
+Corporation.
+
+
 WHERE THE LICENSE TEXT IS INSIDE THE IMAGE
 
-Every image carries the text. After pulling:
+Every image carries the text. /usr/share/licenses/erebine/ holds the
+Erebine MIT text (LICENSE), the third-party notices for the Erebine
+binary (THIRD_PARTY_NOTICES) and a routing file (README) that names
+where every other license in the image lives:
 
-  Erebine agent binaries (MIT)  /usr/share/licenses/erebine/LICENSE
-  Swift packages in them        /usr/share/licenses/erebine/THIRD_PARTY_NOTICES
-  NVIDIA, on the CUDA images    /workspace/license.txt and
-                                /opt/nvidia/entrypoint.d/
-  AMD, on the ROCm image        /opt/rocm/share/doc/<component>/
-  Base distribution packages    /usr/share/doc/<package>/copyright
-  Python packages               <dist>.dist-info/ in the image's venv
+  NVIDIA NVSHMEM, CUDA images     /usr/share/licenses/erebine/nvidia/
+  NVIDIA cuSPARSELt, CUDA images  nvidia/cusparselt/ in the venv's
+                                  site-packages
+  AMD ROCm, ROCm image            /usr/share/licenses/erebine/rocm/
+  ROCm bundled system libraries,  /usr/share/licenses/erebine/rocm-sysdeps/
+  ROCm image
+  Intel, Intel GPU images         /usr/share/licenses/erebine/intel/
+  LLVM OpenMP runtime, CPU images /usr/share/licenses/erebine/libomp/
+  Crates in vLLM's Rust frontend, /usr/share/licenses/erebine/vllm-rs/
+  vLLM images but eim-vllm-rocm
+  Other Python packages, among    <dist>.dist-info/ in the venv's
+  them the other NVIDIA           site-packages
+  components
+  Base distribution packages      named in the routing file
 
 Read a file inside an image without starting an agent:
 
 ``` shell
 podman run --rm --entrypoint /bin/cat \
-  ghcr.io/erebine/container-agents/eim-vllm-cuda:latest \
-  /workspace/license.txt
+  ghcr.io/erebine/container-agents/eim-vllm-cuda:v3.4.0 \
+  /usr/share/licenses/erebine/README
 ```
 
 What Erebine changes in the inference stack is recorded in PATCHES.md.
 The MIT text for the Erebine layer of this repository is in LICENSE.
 
-Vendor documents checked 2026-09-14: NVIDIA Software License Agreement,
-Last Modified May 07, 2026; Product-Specific Terms for NVIDIA AI
-Products, Last Modified April 15, 2026.
+This notice describes the v3.4.0 images and was checked against the
+license files and labels they carry. A later release can differ; the
+license page above describes the current one.
+
+Vendor documents checked 2026-11-14, as published: CUDA Toolkit End
+User License Agreement, last updated January 26, 2026; cuDNN agreement
+and supplement, v. February 22, 2022; cuSPARSELt agreement and
+supplement, v. October 12, 2020; NVSHMEM agreement, v. September 3,
+2019, and supplement, v. July 11, 2019; CUTLASS DSL agreement, v. May
+8, 2025. Intel Simplified Software License, Version October 2022, as
+the oneMKL, TBB and tcmlib packages carry it.

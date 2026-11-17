@@ -16,12 +16,15 @@ to tailor the environment to your specific needs.
 
 ## Vendor terms
 
-The GPU images contain vendor software under vendor terms. The CUDA images
-(`eim-vllm-cuda`, `eim-vllm-omni-cuda`) carry NVIDIA software; the ROCm image
-(`eim-vllm-rocm`) carries AMD's. Pulling or running those images is subject to
-the vendor's terms, and those terms restrict use, not only redistribution --
-emotion recognition, for one, is prohibited outright on the NVIDIA images. The
-CPU, ZenDNN and EEM images are built on plain Debian and carry no vendor terms.
+The GPU EIM images contain vendor software under vendor terms. The CUDA images
+(`eim-vllm-cuda`, `eim-vllm-omni-cuda`) carry NVIDIA software, the ROCm image
+(`eim-vllm-rocm`) AMD's, and the Intel GPU images (`eim-vllm-omix`,
+`eim-vllm-omni-omix`) Intel's. Pulling or running those images is subject to
+the vendor's terms, and some of them restrict use, not only redistribution --
+the NVIDIA components, for one, are licensed only for use in systems with
+NVIDIA GPUs. The CPU images (`eim-vllm-cpu`, `eim-vllm-zendnn`) contain no
+software under Intel's developer-tools license agreement; the OpenMP runtime
+they preload is LLVM's. The EEM image carries no NVIDIA, AMD or Intel software.
 
 [VENDOR_NOTICES](VENDOR_NOTICES) names the terms, links them, lists the
 restrictions you are least likely to expect, and says where each license text
@@ -33,7 +36,13 @@ To get started with Erebine.ai, simply clone the repository and follow the instr
 README file. The compose files are located in the `compose` directory, and you can choose
 the one that best suits your needs.
 
-Before running the compose files, make sure to set the `EREBINE_AGENT_JOIN_KEY` environment
+This repository carries the compose files and the license notices, not the images' Dockerfiles.
+Erebine builds the images and publishes them to `ghcr.io/erebine/container-agents`; each image
+carries its license texts under `/usr/share/licenses/erebine/`, and the EIM documentation at
+https://erebine.ai/docs/eim lists every image and, for each image a file here runs, that compose
+file.
+
+Before running the compose files, make sure to set the `EREBINE_EIM_JOIN_KEY` environment
 variable with your join key. This key is required for the agent to connect to the Erebine
 network. You can obtain a join key from the Erebine dashboard.
 
@@ -49,15 +58,23 @@ and customize the compose files for your specific use case.
 Basic execution is as simple as running the following commands in your terminal:
 
 ``` shell
-export EREBINE_AGENT_JOIN_KEY=xxxxxxxx
+export EREBINE_EIM_JOIN_KEY=xxxxxxxx
+export RENDER_GID="$(getent group render | cut -d: -f3)"
+export VIDEO_GID="$(getent group video | cut -d: -f3)"
+sudo mkdir -p /data/erebine/models /data/erebine/config /data/erebine/vllm-cache
+sudo chown -R 5152:5152 /data/erebine
 sudo podman compose -f compose/compose.agent-amd-rocm.yaml down
 sudo -E podman compose -f compose/compose.agent-amd-rocm.yaml up -d
 sudo podman logs eim-vllm-rocm -f
 ```
 
-* The first command sets the required environment variable for the join key.
-* The second command ensures that any existing containers are stopped and removed.
-* The third command starts the new containers in detached mode.
+* The first three commands set the join key and the host's render and video group ids, which
+  the ROCm and Intel files pass to the container by number.
+* The `mkdir` and `chown` commands create the host directories the compose file mounts, owned
+  by the user the EIM runs as (uid 5152). Each compose file's header lists the directories it
+  mounts.
+* The `down` command ensures that any existing containers are stopped and removed.
+* The `up -d` command starts the new containers in detached mode.
 * The last command allows you to view the logs of the running container in real-time.
 
 ### Optional system configuration

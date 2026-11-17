@@ -1,4 +1,4 @@
-# Erebine EIM Agent -- AMD ROCm, one agent per GPU
+# Erebine Inference Microservice (EIM) -- AMD ROCm, one EIM per GPU
 #
 # WHEN TO USE THIS FILE INSTEAD OF compose.agent-amd-rocm.yaml:
 #
@@ -28,37 +28,45 @@
 #      sudo chown -R 5152:5152 /data/erebine
 #
 #   3. Set environment variables or create a .env file:
-#      export EREBINE_AGENT_JOIN_KEY=ejk_your_key_here
+#      export EREBINE_EIM_JOIN_KEY=ejk_your_key_here
+#      export RENDER_GID="$(getent group render | cut -d: -f3)"
+#      export VIDEO_GID="$(getent group video | cut -d: -f3)"
 #
-#   4. Start the agent:
-#      sudo -E podman compose -f compose.agent-nvidia.yaml up -d
+#   4. Start the EIM:
+#      sudo -E podman compose -f compose/compose.multi-agent-amd-rocm-multi-gpu.yaml up -d
 #
 # ENROLLMENT:
-#   Each agent enrolls separately and appears as its own worker in the
+#   Each EIM enrolls separately and appears as its own worker in the
 #   dashboard. Both may use the same join key. Enrollment state is persisted
-#   per agent under /data/erebine/config-gpu<N>; do NOT point two agents at
+#   per EIM under /data/erebine/agent<N>/config; do NOT point two EIMs at
 #   one config directory -- they would fight over a single worker identity.
 #
 # SCALING BEYOND TWO GPUS:
-#   Copy an agent block, increment HIP_VISIBLE_DEVICES, the container name,
+#   Copy an EIM block, increment HIP_VISIBLE_DEVICES, the container name,
 #   the metrics port, and the config/model volume paths.
 #
 # ENVIRONMENT VARIABLES:
-#   EREBINE_AGENT_JOIN_KEY              [REQUIRED] Join key from the Erebine dashboard (first run only)
-#   EREBINE_AGENT_GPU_MEMORY_UTILIZATION GPU memory utilization fraction (default: 0.90)
-#   EREBINE_AGENT_MAX_MODEL_LEN         Maximum sequence length (default: model default)
-#   EREBINE_AGENT_MAX_CONCURRENT        Optional ceiling for concurrent requests (auto-configured when not set)
-#   EREBINE_AGENT_OVERPROVISION_FACTOR  Safe-to-admit slot factor, at least 1.0 (default: 1.5)
-#   EREBINE_AGENT_LOG_LEVEL             Logging level: trace, debug, info, warning, error (default: info)
+#   EREBINE_EIM_JOIN_KEY                [REQUIRED] Join key from the Erebine dashboard (first run only)
+#   RENDER_GID                          [REQUIRED] The host's render group id (getent group render)
+#   VIDEO_GID                           [REQUIRED] The host's video group id (getent group video)
+#                                        group_add takes these numeric ids rather than the names,
+#                                        because a name is looked up in the IMAGE's /etc/group,
+#                                        which has no render group, and a failed lookup aborts the
+#                                        container start.
+#   EREBINE_EIM_GPU_MEMORY_UTILIZATION GPU memory utilization fraction (default: 0.90)
+#   EREBINE_EIM_MAX_MODEL_LEN           Maximum sequence length (default: model default)
+#   EREBINE_EIM_MAX_CONCURRENT          Optional ceiling for concurrent requests (auto-configured when not set)
+#   EREBINE_EIM_OVERPROVISION_FACTOR    Safe-to-admit slot factor, at least 1.0 (default: 1.5)
+#   EREBINE_EIM_LOG_LEVEL               Logging level: trace, debug, info, warning, error (default: info)
 #
-#   HIP_VISIBLE_DEVICES and EREBINE_AGENT_TENSOR_PARALLEL_SIZE are set
+#   HIP_VISIBLE_DEVICES and EREBINE_EIM_TENSOR_PARALLEL_SIZE are set
 #   per-agent below and are deliberately NOT operator-overridable here: pinning
-#   one GPU per agent is the entire point of this file.
+#   one GPU per EIM is the entire point of this file.
 #
 # KERNEL SOCKET BUFFER TUNING (optional):
-#   The agent sets ZeroMQ socket buffers to 4 MiB for streaming throughput.
+#   The EIM sets ZeroMQ socket buffers to 4 MiB for streaming throughput.
 #   Linux defaults net.core.wmem_max and net.core.rmem_max to 212992 bytes,
-#   which silently caps the requested buffer size. The agent will attempt to
+#   which silently caps the requested buffer size. The EIM will attempt to
 #   raise these limits on startup, which works only for a privileged
 #   container on the HOST network (/proc/sys is read-only in every
 #   unprivileged container, and the knobs do not exist in a bridge
@@ -77,13 +85,17 @@ x-agent-base: &agent-base
   privileged: true
   shm_size: ${SHM_SIZE:-90g}
   # Podman defaults a container to 2048 pids and counts threads; vLLM needs more.
+  # NCCL over InfiniBand or RoCE registers memory against memlock: no limit either.
+  # libdispatch starts its worker threads at nice -2; uid 5152 holds no capabilities,
+  # so it needs this raw RLIMIT_NICE (24 allows nice -4).
   pids_limit: -1
-  # No locked-memory limit, as erectl sets on every agent: NCCL over
-  # InfiniBand or RoCE registers memory against it.
   ulimits:
     memlock:
       soft: -1
       hard: -1
+    nice:
+      soft: 24
+      hard: 24
   devices:
     - /dev/kfd:/dev/kfd
     - /dev/dri:/dev/dri
@@ -94,20 +106,33 @@ x-agent-base: &agent-base
     - SYS_PTRACE
     - CAP_SYS_ADMIN
   group_add:
-    - video
-    - render
+    - "${RENDER_GID:?set RENDER_GID to the host render group id (getent group render)}"
+    - "${VIDEO_GID:?set VIDEO_GID to the host video group id (getent group video)}"
   restart: unless-stopped
 
 x-agent-env: &agent-env
+  # Each operator setting is passed under its EREBINE_EIM_* name and
+  # under its pre-2.10 EREBINE_AGENT_* name, so a .env written for an
+  # older release keeps working: the EIM reads the old name only when
+  # the new one is empty, and warns once at startup.
+  EREBINE_EIM_JOIN_KEY: "${EREBINE_EIM_JOIN_KEY:-}"
   EREBINE_AGENT_JOIN_KEY: "${EREBINE_AGENT_JOIN_KEY:-}"
+  EREBINE_EIM_MAX_MODEL_LEN: "${EREBINE_EIM_MAX_MODEL_LEN:-}"
   EREBINE_AGENT_MAX_MODEL_LEN: "${EREBINE_AGENT_MAX_MODEL_LEN:-}"
-  EREBINE_AGENT_GPU_MEMORY_UTILIZATION: "${EREBINE_AGENT_GPU_MEMORY_UTILIZATION:-0.90}"
+  EREBINE_EIM_GPU_MEMORY_UTILIZATION: "${EREBINE_EIM_GPU_MEMORY_UTILIZATION:-}"
+  EREBINE_AGENT_GPU_MEMORY_UTILIZATION: "${EREBINE_AGENT_GPU_MEMORY_UTILIZATION:-}"
+  # This file's default. The image entrypoint applies it only when
+  # neither name above holds a value, so an old .env value still wins.
+  EREBINE_DEFAULT_EIM_GPU_MEMORY_UTILIZATION: "0.90"
+  EREBINE_EIM_MAX_CONCURRENT: "${EREBINE_EIM_MAX_CONCURRENT:-}"
   EREBINE_AGENT_MAX_CONCURRENT: "${EREBINE_AGENT_MAX_CONCURRENT:-}"
+  EREBINE_EIM_OVERPROVISION_FACTOR: "${EREBINE_EIM_OVERPROVISION_FACTOR:-}"
   EREBINE_AGENT_OVERPROVISION_FACTOR: "${EREBINE_AGENT_OVERPROVISION_FACTOR:-}"
-  EREBINE_AGENT_LOG_LEVEL: "${EREBINE_AGENT_LOG_LEVEL:-info}"
-  EREBINE_AGENT_VLLM_ENV: "VLLM_ROCM_USE_AITER=1"
-  # One GPU per agent: no cross-GPU collective, so no RCCL.
-  EREBINE_AGENT_TENSOR_PARALLEL_SIZE: "1"
+  EREBINE_EIM_LOG_LEVEL: "${EREBINE_EIM_LOG_LEVEL:-}"
+  EREBINE_AGENT_LOG_LEVEL: "${EREBINE_AGENT_LOG_LEVEL:-}"
+  EREBINE_EIM_VLLM_ENV: "VLLM_ROCM_USE_AITER=1"
+  # One GPU per EIM: no cross-GPU collective, so no RCCL.
+  EREBINE_EIM_TENSOR_PARALLEL_SIZE: "1"
 
 services:
   agent0:
